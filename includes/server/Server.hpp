@@ -8,7 +8,7 @@
 #include "http/HTTPResponse.hpp"
 #include "http/HTTPRequest.hpp"
 #include "http/HTTPRequestParser.hpp"
-#include "http/HttpStatus.hpp"
+#include "http/HTTPStatus.hpp"
 #include "server/Client.hpp"
 #include "server/ServerSocket.hpp"
 class Server
@@ -31,9 +31,9 @@ private:
 	//Request handling
 	HTTPResponse handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket);
 	//Response handling
-	HTTPResponse createResponse(HttpStatus statusCode, const std::string &contentType,
+	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType,
 								const std::string &body);
-	HTTPResponse createErrorResponse(HttpStatus statusCode, const ServerSocket &serverSocket);
+	HTTPResponse createErrorResponse(HTTPStatus statusCode, const ServerSocket &serverSocket);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
 

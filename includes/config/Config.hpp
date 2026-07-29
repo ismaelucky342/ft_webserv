@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:25:37 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/21 12:19:22 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 16:08:55 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,10 @@
 #include <string>
 #include <iostream>
 #include <map>
+#include <vector>
 #include "colors.hpp"
+#include "config/Listen.hpp"
+#include "config/Location.hpp"
 
 class Config
 {
@@ -26,26 +29,29 @@ public:
 	Config &operator=(const Config &other);
 	~Config();
 
-	int getPort() const;
-	std::string getRoot() const;
-	std::string getIndex() const;
-	std::string getHost() const;
-	std::string getErrorPage(int errorCode) const;
-	void setPort(int port);
+	const std::vector<Listen>&		getListens() const;
+	std::string						getRoot() const;
+	std::string						getIndex() const;
+	size_t							getClientMaxBodySize() const;
+	std::string						getErrorPage(int errorCode) const;
+	const std::vector<Location>&	getLocations() const;
+
+	void addListen(const Listen& listen);
 	void setRoot(const std::string &root);
 	void setIndex(const std::string &index);
-	void setHost(const std::string &host);
-	void setErrorPage(int errorCode, const std::string &errorPagePath);
+	void setClientMaxBodySize(size_t size);
+	void addErrorPage(int errorCode, const std::string &errorPagePath);
+	void addLocation(const Location& location);
 
 	void print() const;
 
 private:
-	std::string _root;
-	std::string _index;
-	std::string _host;
-	int _port;
-	std::map<int, std::string>
-		_errorPages; // Map para almacenar las páginas de error personalizadas, donde la clave es el código de error y el valor es la ruta del archivo HTML correspondiente.
+	std::vector<Listen>			_listens;
+	std::string					_root;
+	std::string 				_index;
+	size_t						_clientMaxBodySize;
+	std::map<int, std::string>	_errorPages; // Map para almacenar las páginas de error personalizadas, donde la clave es el código de error y el valor es la ruta del archivo HTML correspondiente.
+	std::vector<Location>		_locations;
 };
 
 #endif

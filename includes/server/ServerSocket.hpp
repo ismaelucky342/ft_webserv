@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:15:20 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 11:48:40 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 13:28:40 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,7 +18,8 @@
 class ServerSocket
 {
 private:
-	Config _config;
+	const Listen *_listen;
+	const Config *_config;
 	struct addrinfo *_addrInfo;
 	int _serverSocketFd;
 
@@ -30,7 +31,7 @@ private:
 	void listenSocket();
 
 public:
-	ServerSocket(const Config &config);
+	ServerSocket(const Listen &listen,const Config &config);
 	ServerSocket(const ServerSocket &other);
 	ServerSocket &operator=(const ServerSocket &other);
 	~ServerSocket();

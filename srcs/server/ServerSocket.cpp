@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 11:48:51 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 13:32:32 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,10 +21,11 @@
 /**
  * Constructor for the ServerSocket class.
  *
+ * @param listen The listen configuration object.
  * @param config The configuration object containing server settings.
  */
-ServerSocket::ServerSocket(const Config &config)
-	: _config(config), _addrInfo(NULL), _serverSocketFd(-1)
+ServerSocket::ServerSocket(const Listen &listen, const Config &config)
+	: _listen(&listen), _config(&config), _addrInfo(NULL), _serverSocketFd(-1)
 {
 	std::cout << BOLD_GREEN << "ServerSocket constructor called" << RESET << std::endl;
 }
@@ -35,7 +36,7 @@ ServerSocket::ServerSocket(const Config &config)
  * @param other The ServerSocket object to copy from.
  */
 ServerSocket::ServerSocket(const ServerSocket &other)
-	: _config(other._config), _addrInfo(other._addrInfo), _serverSocketFd(other._serverSocketFd)
+	: _listen(other._listen), _config(other._config), _addrInfo(other._addrInfo), _serverSocketFd(other._serverSocketFd)
 {
 	std::cout << BOLD_GREEN << "ServerSocket copy constructor called" << RESET << std::endl;
 }
@@ -50,6 +51,7 @@ ServerSocket &ServerSocket::operator=(const ServerSocket &other)
 {
 	if (this != &other)
 	{
+		_listen = other._listen;
 		_config = other._config;
 		_addrInfo = other._addrInfo;
 		_serverSocketFd = other._serverSocketFd;
@@ -77,7 +79,7 @@ void ServerSocket::setupAddressInfo()
 		hints; // Estructura que contiene información sobre el tipo de socket que queremos crear. La usamos para indicarle al sistema operativo qué tipo de socket queremos crear y cómo queremos que se comporte.
 	std::ostringstream portStream;
 
-	portStream << _config.getPort();
+	portStream << _listen->getPort();
 	std::string port = portStream.str();
 
 	memset(&hints, 0, sizeof(hints));
@@ -87,7 +89,7 @@ void ServerSocket::setupAddressInfo()
 	hints.ai_socktype = SOCK_STREAM; // TCP socket
 	hints.ai_flags = AI_PASSIVE;	 // Socket will be used for binding
 
-	if (getaddrinfo(_config.getHost().c_str(), port.c_str(), &hints, &_addrInfo) !=
+	if (getaddrinfo(_listen->getInterface().c_str(), port.c_str(), &hints, &_addrInfo) !=
 		0) // (Parametros: host, port, hints(La receta de cómo queremos crear el socket), result (la estructura donde se guardará la info de la dirección. Mirar en http.md para entender la estructura addrinfo))
 	{
 		std::cerr << "Error getting address info" << std::endl;
@@ -134,7 +136,7 @@ void ServerSocket::bindSocket()
 		std::cerr << "Error binding socket" << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	std::cout << "Socket bound to port " << _config.getPort() << std::endl;
+	std::cout << "Socket bound to port " << _listen->getPort() << std::endl;
 }
 
 /**
@@ -168,7 +170,7 @@ int ServerSocket::getserverSocketFd() const
  */
 const Config &ServerSocket::getConfig() const
 {
-	return _config;
+	return *_config;
 }
 
 /**

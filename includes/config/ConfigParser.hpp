@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 14:38:09 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 13:32:32 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 16:41:59 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,6 +39,7 @@ private:
 	void parseRoot(Config &config);
 	void parseIndex(Config &config);
 	void parseErrorPage(Config &config);
+	void parseOther(); // BORRAR Auxiliar para imprimir los bloques que aun no parseo. Luego se eliminará
 
 	long strToLong(const std::string &str);
 };

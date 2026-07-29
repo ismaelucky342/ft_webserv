@@ -6,12 +6,13 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 15:08:51 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 16:07:36 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "colors.hpp"
 #include "config/ConfigParser.hpp"
+#include "config/Listen.hpp"
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
@@ -181,7 +182,8 @@ Config ConfigParser::parseServer()
 		else if (current() == "error_page")
 			parseErrorPage(config);
 		else
-			throw std::runtime_error("Unexpected token in server block: " + current());
+			parseOther();
+			// throw std::runtime_error("Unexpected token in server block: " + current());
 	}
 	expect("}");
 	return config; // Una vez hemos parseado todo el bloque de configuracion del server, devolvemos el objeto config con los valores parseados.
@@ -194,6 +196,7 @@ Config ConfigParser::parseServer()
  */
 void ConfigParser::parseListen(Config &config)
 {
+	std::string interface = "0.0.0.0";
 	expect(
 		"listen"); // Si el token actual es "listen", avanzamos al siguiente token que debería ser el número de puerto.
 	std::string listenStr =
@@ -204,11 +207,9 @@ void ConfigParser::parseListen(Config &config)
 		std::string::
 			npos) // Si colonPos no es npos, significa que se encontró un ':' en el token actual, lo que indica que se especificó una interfaz además del puerto.
 	{
-		std::string host =
-			listenStr.substr(0, colonPos); // Obtenemos la parte antes del ':' como host
-		if (host.empty())
-			throw std::runtime_error("Missing host");
-		config.setHost(host); // Establecemos el host en el objeto config
+		interface = listenStr.substr(0, colonPos); // Obtenemos la parte antes del ':' como interfaz
+		if (interface.empty())
+			throw std::runtime_error("Missing interface");
 		listenStr = listenStr.substr(colonPos +
 									 1); // Actualizamos listenStr para que contenga solo el puerto
 		if (listenStr.empty())
@@ -217,9 +218,9 @@ void ConfigParser::parseListen(Config &config)
 	long port = strToLong(listenStr);
 	if (port < 1 || port > 65535) // Comprobamos que el puerto esté en el rango válido (1-65535).
 		throw std::runtime_error("Invalid port number: " + current());
-	config.setPort(
-		static_cast<int>(port)); // Si todo es correcto, establecemos el puerto en el objeto config.
-	next();						 // Avanzamos al siguiente token, que debería ser el punto y coma.
+	Listen listen(static_cast<int>(port), interface);
+	config.addListen(listen); // Agregamos el objeto Listen al objeto Config.
+		next();						 // Avanzamos al siguiente token, que debería ser el punto y coma.
 	expect(
 		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de puerto. SI no lo es lanzamos un error porque no estaria bien formado.
 }
@@ -268,12 +269,28 @@ void ConfigParser::parseErrorPage(Config &config)
 		throw std::runtime_error("Invalid error code: " + errorCodeStr);
 	next(); // Avanzamos al siguiente token, que debería ser la ruta de la página de error.
 	std::string errorPagePath = current(); // Obtenemos el valor del token actual
-	config.setErrorPage(
+	config.addErrorPage(
 		static_cast<int>(errorCode),
 		errorPagePath); // Establecemos la ruta de la página de error en el objeto config.
 	next();				// Avanzamos al siguiente token, que debería ser el punto y coma.
 	expect(
 		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de página de error. SI no lo es lanzamos un error porque no estaria bien formado.
+}
+
+/**
+ * Parses any other directive that is not explicitly handled. it just take every toket until it finds the end of the block (}) and prints it to the console.
+ * ¡Esta función es solo para probar mientras no parseo las otras directivas. quitarla luego de la clase!
+ * config: The Config object to initialize.
+ */
+void ConfigParser::parseOther()
+{
+	std::cout << BOLD_YELLOW << "Parsing other directive: " << current() << RESET << std::endl;
+	while (current() != "}")
+	{
+		std::cout << BOLD_YELLOW << "Token: " << current() << RESET << std::endl;
+		next();
+	}
+	expect("}"); // Comprobamos que el siguiente token sea una llave de cierre, que indica el final del bloque. SI no lo es lanzamos un error porque no estaria bien formado.
 }
 
 long ConfigParser::strToLong(const std::string &str)

@@ -1,16 +1,16 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   HttpStatus.cpp                                     :+:      :+:    :+:   */
+/*   HTTPStatus.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 12:51:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/14 14:57:59 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 11:39:48 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "http/HttpStatus.hpp"
+#include "http/HTTPStatus.hpp"
 
 /**
  * Returns the status message for a given HTTP status code.
@@ -18,7 +18,7 @@
  * status: The HTTP status code.
  * @return The corresponding status message.
  */
-std::string getStatusMessage(HttpStatus status)
+std::string getStatusMessage(HTTPStatus status)
 {
 	switch (status)
 	{

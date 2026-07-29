@@ -24,6 +24,8 @@ SRC_FILES	=	main.cpp \
 				server/Client.cpp \
 				config/Config.cpp \
 				config/ConfigParser.cpp \
+				config/Listen.cpp \
+				config/Location.cpp \
 				http/HTTPException.cpp \
 				http/HTTPRequest.cpp \
 				http/HTTPRequestParser.cpp \

@@ -3,7 +3,7 @@
 #include <sstream>
 #include "colors.hpp"
 #include "http/HTTPException.hpp"
-#include "http/HttpStatus.hpp"
+#include "http/HTTPStatus.hpp"
 
 /**
  * Default constructor for the HTTPRequestParser class.

@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   HttpStatus.hpp                                     :+:      :+:    :+:   */
+/*   HTTPStatus.hpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 11:17:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/14 12:52:59 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 11:38:53 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,7 +15,7 @@
 
 #include <string>
 
-enum HttpStatus
+enum HTTPStatus
 {
 	// 2xx everything is OK
 	OK = 200,
@@ -37,6 +37,6 @@ enum HttpStatus
 	HTTP_VERSION_NOT_SUPPORTED = 505
 };
 
-std::string getStatusMessage(HttpStatus status);
+std::string getStatusMessage(HTTPStatus status);
 
 #endif

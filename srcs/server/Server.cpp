@@ -17,8 +17,13 @@
 Server::Server(const std::vector<Config> &configs)
 {
 	for (size_t i = 0; i < configs.size(); ++i)
-		_serverSockets.push_back(ServerSocket(configs[i]));
-	std::cout << BOLD_GREEN << "Server constructor called" << RESET << std::endl;
+	{
+		for (size_t j = 0; j < configs[i].getListens().size(); ++j)
+		{
+			const Listen &listen = configs[i].getListens()[j];
+			_serverSockets.push_back(ServerSocket(listen, configs[i]));
+		}
+	}
 }
 
 /**
@@ -277,7 +282,7 @@ void Server::readFromClient(int clientSocket)
 	catch (const HTTPException &e)
 	{
 		client.getResponse() = createErrorResponse(
-			static_cast<HttpStatus>(e.getStatusCode()),
+			static_cast<HTTPStatus>(e.getStatusCode()),
 			client
 				.getServerSocket()); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
 		client.getSendBuffer() = client.getResponse().serialize();
@@ -385,7 +390,7 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocke
  * @param body The body content of the response.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createResponse(HttpStatus statusCode, const std::string &contentType,
+HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &contentType,
 									const std::string &body)
 {
 	HTTPResponse response;
@@ -408,7 +413,7 @@ HTTPResponse Server::createResponse(HttpStatus statusCode, const std::string &co
  * @param statusCode The HTTP status code.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createErrorResponse(HttpStatus statusCode, const ServerSocket &serverSocket)
+HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const ServerSocket &serverSocket)
 {
 	const Config &config = serverSocket.getConfig();
 	std::ostringstream errorPagePathStream;

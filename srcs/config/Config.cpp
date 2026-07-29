@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:28:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/21 15:20:55 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/29 12:23:09 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,7 @@
  * index: Default index file ("index.html").
  * host: Default host ("0.0.0.0").
  */
-Config::Config() : _root("./"), _index("index.html"), _host("0.0.0.0"), _port(8080)
+Config::Config() : _root("./"), _index("index.html"), _clientMaxBodySize(1024 * 1024) // 1 MB default
 {
 	std::cout << BOLD_GREEN << "Config default constructor called" << RESET << std::endl;
 }
@@ -34,8 +34,7 @@ Config::Config() : _root("./"), _index("index.html"), _host("0.0.0.0"), _port(80
  * of another.
  */
 Config::Config(const Config &other)
-	: _root(other._root), _index(other._index), _host(other._host), _port(other._port),
-	  _errorPages(other._errorPages)
+	: _listens(other._listens), _root(other._root), _index(other._index), _clientMaxBodySize(other._clientMaxBodySize), _errorPages(other._errorPages), _locations(other._locations)
 {
 	std::cout << BOLD_GREEN << "Config copy constructor called" << RESET << std::endl;
 }
@@ -48,11 +47,12 @@ Config &Config::operator=(const Config &other)
 {
 	if (this != &other)
 	{
+		_listens = other._listens;
 		_root = other._root;
 		_index = other._index;
-		_port = other._port;
-		_host = other._host;
+		_clientMaxBodySize = other._clientMaxBodySize;
 		_errorPages = other._errorPages;
+		_locations = other._locations;
 	}
 	std::cout << BOLD_GREEN << "Config assignment operator called" << RESET << std::endl;
 	return *this;
@@ -64,6 +64,15 @@ Config &Config::operator=(const Config &other)
 Config::~Config()
 {
 	std::cout << BOLD_RED << "Config destructor called" << RESET << std::endl;
+}
+
+/**
+ * Gets the list of Listen objects.
+ * @return A constant reference to the vector of Listen objects.
+ */
+const std::vector<Listen>& Config::getListens() const
+{
+	return _listens;
 }
 
 /**
@@ -85,12 +94,12 @@ std::string Config::getIndex() const
 }
 
 /**
- * Gets the port number.
- * @return The port number.
+ * Gets the maximum allowed size for client request bodies.
+ * @return The maximum allowed size in bytes.
  */
-int Config::getPort() const
+size_t Config::getClientMaxBodySize() const
 {
-	return _port;
+	return _clientMaxBodySize;
 }
 
 /*
@@ -104,6 +113,24 @@ std::string Config::getErrorPage(int errorCode) const
 	if (it != _errorPages.end())
 		return it->second;
 	return "";
+}
+
+/**
+ * Gets the list of Location objects.
+ * @return A constant reference to the vector of Location objects.
+ */
+const std::vector<Location>& Config::getLocations() const
+{
+	return _locations;
+}
+
+/**
+ * Adds a Listen object to the configuration.
+ * @param listen The Listen object to add.
+ */
+void Config::addListen(const Listen& listen)
+{
+	_listens.push_back(listen);
 }
 
 /**
@@ -125,30 +152,12 @@ void Config::setIndex(const std::string &index)
 }
 
 /**
- * Sets the port number.
- * @param port The port number.
+ * Sets the maximum allowed size for client request bodies.
+ * @param size The maximum allowed size in bytes.
  */
-void Config::setPort(int port)
+void Config::setClientMaxBodySize(size_t size)
 {
-	_port = port;
-}
-
-/**
- * Gets the host.
- * @return The host.
- */
-std::string Config::getHost() const
-{
-	return _host;
-}
-
-/**
- * Sets the host.
- * @param host The host.
- */
-void Config::setHost(const std::string &host)
-{
-	_host = host;
+	_clientMaxBodySize = size;
 }
 
 /**
@@ -156,9 +165,18 @@ void Config::setHost(const std::string &host)
  * @param errorCode The HTTP error code.
  * @param errorPagePath The path to the corresponding error page.
  */
-void Config::setErrorPage(int errorCode, const std::string &errorPagePath)
+void Config::addErrorPage(int errorCode, const std::string &errorPagePath)
 {
 	_errorPages.insert(std::make_pair(errorCode, errorPagePath));
+}
+
+/**
+ * Adds a Location object to the configuration.
+ * @param location The Location object to add.
+ */
+void Config::addLocation(const Location& location)
+{
+	_locations.push_back(location);
 }
 
 /**
@@ -167,12 +185,17 @@ void Config::setErrorPage(int errorCode, const std::string &errorPagePath)
 void Config::print() const
 {
 	std::cout << BOLD_GREEN << "Config values:" << RESET << std::endl;
+	std::cout << "  Listens:" << std::endl;
+	for (size_t i = 0; i < _listens.size(); ++i)
+		std::cout << "    Port: " << _listens[i].getPort() << ", Interface: " << _listens[i].getInterface() << std::endl;
 	std::cout << "  Root: " << _root << std::endl;
 	std::cout << "  Index: " << _index << std::endl;
-	std::cout << "  Port: " << _port << std::endl;
-	std::cout << "  Host: " << _host << std::endl;
+	std::cout << "  Client Max Body Size: " << _clientMaxBodySize << std::endl;
 	std::cout << "  Error Pages:" << std::endl;
 	for (std::map<int, std::string>::const_iterator it = _errorPages.begin();
 		 it != _errorPages.end(); ++it)
 		std::cout << "    " << it->first << ": " << it->second << std::endl;
+	std::cout << "  Locations:" << std::endl;
+	for (size_t i = 0; i < _locations.size(); ++i)
+		std::cout << "    Path: " << _locations[i].getPath() << std::endl;
 }
