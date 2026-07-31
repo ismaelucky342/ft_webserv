@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 16:07:36 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/31 14:28:17 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -175,6 +175,8 @@ Config ConfigParser::parseServer()
 		if (current() ==
 			"listen") // Si el token es listen parseamos el puerto y la interfaz si se indica y lo guardamos en el objeto config.
 			parseListen(config);
+		else if (current() == "server_name")
+			parseServerName(config);
 		else if (current() == "root")
 			parseRoot(config);
 		else if (current() == "index")
@@ -223,6 +225,21 @@ void ConfigParser::parseListen(Config &config)
 		next();						 // Avanzamos al siguiente token, que debería ser el punto y coma.
 	expect(
 		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de puerto. SI no lo es lanzamos un error porque no estaria bien formado.
+}
+
+/**
+ * Parses the server_name directive.
+ * 
+ * config: The Config object to initialize.
+ */
+void ConfigParser::parseServerName(Config &config)
+{
+	expect("server_name"); // Si el token actual es "server_name", avanzamos al
+	std::string serverName = current(); // Obtenemos el valor del token actual.
+	config.setServerName(serverName);   // Establecemos el nombre del servidor en el objeto config.
+	next();							  // Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(
+		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de nombre de servidor. SI no lo es lanzamos un error porque no estaria bien formado.
 }
 
 /**

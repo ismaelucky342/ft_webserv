@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 11:21:28 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 15:43:23 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/30 17:23:47 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,7 @@ public:
 	Listen(int port);
 	Listen(const Listen &other);
 	Listen &operator=(const Listen &other);
+	bool operator==(const Listen &other) const;
 	~Listen();
 
 	int getPort() const;

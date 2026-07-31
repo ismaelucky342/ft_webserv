@@ -36,6 +36,7 @@ private:
 	HTTPResponse createErrorResponse(HTTPStatus statusCode, const ServerSocket &serverSocket);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
+	ServerSocket *findServerSocket(const Listen &listen);
 
 public:
 	Server(const std::vector<Config> &configs);

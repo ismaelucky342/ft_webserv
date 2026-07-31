@@ -16,12 +16,20 @@
  */
 Server::Server(const std::vector<Config> &configs)
 {
-	for (size_t i = 0; i < configs.size(); ++i)
+	for (size_t i = 0; i < configs.size(); ++i) //LUNES Revisar por que no pone en defaultconfig el config cuando no viene server_name. Cambiar el own por ""
 	{
-		for (size_t j = 0; j < configs[i].getListens().size(); ++j)
+		const Config &config = configs[i];
+		for (size_t j = 0; j < config.getListens().size(); ++j)
 		{
-			const Listen &listen = configs[i].getListens()[j];
-			_serverSockets.push_back(ServerSocket(listen, configs[i]));
+			const Listen &listen = config.getListens()[j];
+			ServerSocket *serverSocket = findServerSocket(listen);
+			if (serverSocket == NULL)
+			{
+				_serverSockets.push_back(ServerSocket(listen));
+				serverSocket = &_serverSockets.back();
+				serverSocket->setDefaultConfig(config);
+			}
+			serverSocket->addConfig(config);
 		}
 	}
 }
@@ -72,7 +80,7 @@ void Server::start()
 {
 	for (size_t i = 0; i < _serverSockets.size(); ++i)
 		_serverSockets[i]
-			.startServerSocket(); //IMP: Creo que aqui ira un buclw cuando tengamos multiples servidores, para que inicie todos los sockets de escucha de todos los servidores.
+			.startServerSocket();
 
 	initPoll();
 	runLoop();
@@ -362,7 +370,7 @@ void Server::disconnectClient(int clientSocket)
 HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket)
 {
 	std::string srcPath;
-	const Config &config = serverSocket.getConfig();
+	const Config &config = *serverSocket.getDefaultConfig(); //ATENCION SOLO PARA PROBAR: Obtenemos la configuracion por defecto del servidor que ha recibido la peticion. Esto es importante porque la configuracion contiene el root y el index que necesitamos para calcular la ruta del fichero a devolver.
 
 	if (request.getPath() ==
 		"/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
@@ -415,7 +423,7 @@ HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &co
  */
 HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const ServerSocket &serverSocket)
 {
-	const Config &config = serverSocket.getConfig();
+	const Config &config = *serverSocket.getDefaultConfig(); //ATENCION SOLO PARA PROBAR: Obtenemos la configuracion por defecto del servidor que ha recibido la peticion. Esto es importante porque la configuracion contiene el root y el index que necesitamos para calcular la ruta del fichero a devolver.
 	std::ostringstream errorPagePathStream;
 
 	errorPagePathStream << config.getRoot() << config.getErrorPage(statusCode);
@@ -449,6 +457,22 @@ ServerSocket *Server::getServerSocketByFd(
 	for (size_t i = 0; i < _serverSockets.size(); ++i)
 	{
 		if (_serverSockets[i].getserverSocketFd() == fd)
+			return &_serverSockets[i];
+	}
+	return NULL;
+}
+
+/**
+ * Finds a server socket corresponding to the given listen configuration.
+ * 
+ * @param listen The listen configuration to search for.
+ * @return A pointer to the ServerSocket object, or NULL if not found.
+ */
+ServerSocket *Server::findServerSocket(const Listen &listen)
+{
+	for (size_t i = 0; i < _serverSockets.size(); ++i)
+	{
+		if (_serverSockets[i].getListen() == listen) // Comparamos el objeto Listen del ServerSocket con el objeto Listen que estamos buscando. Si son iguales, significa que hemos encontrado el ServerSocket correspondiente.
 			return &_serverSockets[i];
 	}
 	return NULL;

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 12:23:53 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 15:44:00 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/30 17:24:16 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,6 +45,16 @@ Listen &Listen::operator=(const Listen &other)
 		_interface = other._interface;
 	}
 	return *this;
+}
+
+/**
+ * Equality operator for the Listen class.
+ * @param other The Listen object to compare with.
+ * @return True if the two Listen objects are equal, false otherwise.
+ */
+bool Listen::operator==(const Listen &other) const
+{
+	return (_port == other._port && _interface == other._interface);
 }
 
 /**

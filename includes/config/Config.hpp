@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:25:37 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 16:08:55 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/30 14:31:55 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,6 +29,7 @@ public:
 	Config &operator=(const Config &other);
 	~Config();
 
+	const std::string&				getServerName() const;
 	const std::vector<Listen>&		getListens() const;
 	std::string						getRoot() const;
 	std::string						getIndex() const;
@@ -36,6 +37,7 @@ public:
 	std::string						getErrorPage(int errorCode) const;
 	const std::vector<Location>&	getLocations() const;
 
+	void setServerName(const std::string &serverName);
 	void addListen(const Listen& listen);
 	void setRoot(const std::string &root);
 	void setIndex(const std::string &index);
@@ -46,6 +48,7 @@ public:
 	void print() const;
 
 private:
+	std::string 				_serverName;
 	std::vector<Listen>			_listens;
 	std::string					_root;
 	std::string 				_index;

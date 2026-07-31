@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/07 14:54:36 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/14 14:57:34 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/30 14:52:25 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,7 +17,7 @@
 /**
  * Default constructor for the HTTPRequest class.
  */
-HTTPRequest::HTTPRequest() : _method(""), _path(""), _version("")
+HTTPRequest::HTTPRequest() : _method(""), _path(""), _queryString(""), _version("")
 {
 	std::cout << BOLD_GREEN << "HTTPRequest default constructor called" << RESET << std::endl;
 }
@@ -28,7 +28,7 @@ HTTPRequest::HTTPRequest() : _method(""), _path(""), _version("")
  * other: The HTTPRequest object to copy.
  */
 HTTPRequest::HTTPRequest(const HTTPRequest &other)
-	: _method(other._method), _path(other._path), _version(other._version),
+	: _method(other._method), _path(other._path), _queryString(other._queryString), _version(other._version),
 	  _headers(other._headers), _body(other._body)
 {
 	std::cout << BOLD_GREEN << "HTTPRequest copy constructor called" << RESET << std::endl;
@@ -46,6 +46,7 @@ HTTPRequest &HTTPRequest::operator=(const HTTPRequest &other)
 	{
 		_method = other._method;
 		_path = other._path;
+		_queryString = other._queryString;
 		_version = other._version;
 		_headers = other._headers;
 		_body = other._body;

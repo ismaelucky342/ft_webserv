@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 13:32:32 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/31 16:09:54 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,10 +22,9 @@
  * Constructor for the ServerSocket class.
  *
  * @param listen The listen configuration object.
- * @param config The configuration object containing server settings.
  */
-ServerSocket::ServerSocket(const Listen &listen, const Config &config)
-	: _listen(&listen), _config(&config), _addrInfo(NULL), _serverSocketFd(-1)
+ServerSocket::ServerSocket(const Listen &listen)
+	: _listen(&listen), _defaultConfig(NULL), _addrInfo(NULL), _serverSocketFd(-1)
 {
 	std::cout << BOLD_GREEN << "ServerSocket constructor called" << RESET << std::endl;
 }
@@ -36,7 +35,7 @@ ServerSocket::ServerSocket(const Listen &listen, const Config &config)
  * @param other The ServerSocket object to copy from.
  */
 ServerSocket::ServerSocket(const ServerSocket &other)
-	: _listen(other._listen), _config(other._config), _addrInfo(other._addrInfo), _serverSocketFd(other._serverSocketFd)
+	: _listen(other._listen), _configs(other._configs), _defaultConfig(other._defaultConfig), _addrInfo(other._addrInfo), _serverSocketFd(other._serverSocketFd)
 {
 	std::cout << BOLD_GREEN << "ServerSocket copy constructor called" << RESET << std::endl;
 }
@@ -52,7 +51,8 @@ ServerSocket &ServerSocket::operator=(const ServerSocket &other)
 	if (this != &other)
 	{
 		_listen = other._listen;
-		_config = other._config;
+		_configs = other._configs;
+		_defaultConfig = other._defaultConfig;
 		_addrInfo = other._addrInfo;
 		_serverSocketFd = other._serverSocketFd;
 	}
@@ -154,6 +154,50 @@ void ServerSocket::listenSocket()
 }
 
 /**
+ * Gets the listen configuration object associated with the server socket.
+ *
+ * @return A constant reference to the listen configuration object.
+ */
+const Listen &ServerSocket::getListen() const
+{
+	return *_listen;
+}
+
+/**
+ * Gets the map of hostnames to configuration objects associated with the server socket.
+ *
+ * @return A constant reference to the map of hostnames to configuration objects.
+ */
+const std::map<std::string, const Config *> &ServerSocket::getConfigs() const
+{
+	return _configs;
+}
+
+/**
+ * Gets the configuration object for a specific host associated with the server socket.
+ *
+ * @param host The hostname for which to retrieve the configuration.
+ * @return A pointer to the configuration object for the specified host, or NULL if not found.
+ */
+const Config *ServerSocket::getConfigForHost(const std::string &host) const
+{
+	std::map<std::string, const Config *>::const_iterator it = _configs.find(host);
+	if (it != _configs.end())
+		return it->second;
+	return NULL;
+}
+
+/**
+ * Gets the default configuration object associated with the server socket.
+ *
+ * @return A pointer to the default configuration object, or NULL if not set.
+ */
+const Config *ServerSocket::getDefaultConfig() const
+{
+	return _defaultConfig;
+}
+
+/**
  * Gets the server socket descriptor.
  *
  * @return The server socket descriptor.
@@ -164,13 +208,25 @@ int ServerSocket::getserverSocketFd() const
 }
 
 /**
- * Gets the configuration object associated with the server socket.
+ * Adds a configuration object for a specific host to the server socket.
  *
- * @return A reference to the configuration object.
+ * @param host The hostname for which to add the configuration.
+ * @param config The configuration object to add.
  */
-const Config &ServerSocket::getConfig() const
+void ServerSocket::addConfig(const Config &config)
 {
-	return *_config;
+	if (!config.getServerName().empty()) //chequeamos que el server_name no este vacio, porque si lo esta no tiene sentido añadirlo al map de configs.
+		_configs[config.getServerName()] = &config;
+}
+
+/**
+ * Sets the default configuration object for the server socket.
+ *
+ * @param config The configuration object to set as the default.
+ */
+void ServerSocket::setDefaultConfig(const Config &config)
+{
+	_defaultConfig = &config;
 }
 
 /**
@@ -183,4 +239,19 @@ void ServerSocket::startServerSocket()
 	bindSocket();
 	freeAddressInfo(); // Free the address info after binding the socket to avoid memory leaks
 	listenSocket();
+	print(); // Print the server socket information after starting it (IMP: Esto es solo para debuguear y ver que se ha creado correctamente el socket de escucha del servidor. Se puede borrar despues.)
+}
+
+/**
+ * Prints the server socket information, including the port and interface it is listening on.
+ */
+void ServerSocket::print() const
+{
+	std::cout << BOLD_GREEN << "ServerSocket values:" << RESET << std::endl;
+	std::cout << "  Listening on port: " << _listen->getPort() << ", Interface: " << _listen->getInterface() << std::endl;
+	std::cout << "  Server socket descriptor: " << _serverSocketFd << std::endl;
+	std::cout << "  Configurations for hosts:" << std::endl;
+	for (std::map<std::string, const Config *>::const_iterator it = _configs.begin(); it != _configs.end(); ++it)
+		std::cout << "    Host: " << it->first << " -> " << it->second << std::endl;
+	std::cout << "  Default configuration: " << (_defaultConfig ? _defaultConfig->getServerName() : "None") << std::endl;
 }

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:28:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 12:23:09 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/07/31 16:06:59 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,7 @@
  * index: Default index file ("index.html").
  * host: Default host ("0.0.0.0").
  */
-Config::Config() : _root("./"), _index("index.html"), _clientMaxBodySize(1024 * 1024) // 1 MB default
+Config::Config() : _serverName("own"), _root("./"), _index("index.html"), _clientMaxBodySize(1024 * 1024) // 1 MB default
 {
 	std::cout << BOLD_GREEN << "Config default constructor called" << RESET << std::endl;
 }
@@ -34,7 +34,7 @@ Config::Config() : _root("./"), _index("index.html"), _clientMaxBodySize(1024 * 
  * of another.
  */
 Config::Config(const Config &other)
-	: _listens(other._listens), _root(other._root), _index(other._index), _clientMaxBodySize(other._clientMaxBodySize), _errorPages(other._errorPages), _locations(other._locations)
+	: _serverName(other._serverName), _listens(other._listens), _root(other._root), _index(other._index), _clientMaxBodySize(other._clientMaxBodySize), _errorPages(other._errorPages), _locations(other._locations)
 {
 	std::cout << BOLD_GREEN << "Config copy constructor called" << RESET << std::endl;
 }
@@ -47,6 +47,7 @@ Config &Config::operator=(const Config &other)
 {
 	if (this != &other)
 	{
+		_serverName = other._serverName;
 		_listens = other._listens;
 		_root = other._root;
 		_index = other._index;
@@ -64,6 +65,15 @@ Config &Config::operator=(const Config &other)
 Config::~Config()
 {
 	std::cout << BOLD_RED << "Config destructor called" << RESET << std::endl;
+}
+
+/**
+ * Gets the server name.
+ * @return A constant reference to the server name.
+ */
+const std::string& Config::getServerName() const
+{
+	return _serverName;
 }
 
 /**
@@ -122,6 +132,15 @@ std::string Config::getErrorPage(int errorCode) const
 const std::vector<Location>& Config::getLocations() const
 {
 	return _locations;
+}
+
+/**
+ * Sets the server name.
+ * @param serverName The server name.
+ */
+void Config::setServerName(const std::string &serverName)
+{
+	_serverName = serverName;
 }
 
 /**
@@ -185,6 +204,7 @@ void Config::addLocation(const Location& location)
 void Config::print() const
 {
 	std::cout << BOLD_GREEN << "Config values:" << RESET << std::endl;
+	std::cout << "  Server Name: " << _serverName << std::endl;
 	std::cout << "  Listens:" << std::endl;
 	for (size_t i = 0; i < _listens.size(); ++i)
 		std::cout << "    Port: " << _listens[i].getPort() << ", Interface: " << _listens[i].getInterface() << std::endl;
