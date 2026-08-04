@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/31 16:09:54 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/04 10:42:34 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -253,5 +253,6 @@ void ServerSocket::print() const
 	std::cout << "  Configurations for hosts:" << std::endl;
 	for (std::map<std::string, const Config *>::const_iterator it = _configs.begin(); it != _configs.end(); ++it)
 		std::cout << "    Host: " << it->first << " -> " << it->second << std::endl;
-	std::cout << "  Default configuration: " << (_defaultConfig ? _defaultConfig->getServerName() : "None") << std::endl;
+	std::cout << "  Default configuration: " << _defaultConfig << std::endl;
+	// std::cout << "  Default configuration: " << (_defaultConfig ? _defaultConfig->getServerName() : "None") << std::endl;
 }

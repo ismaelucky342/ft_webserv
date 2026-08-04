@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:28:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/31 16:06:59 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/04 11:19:26 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,7 @@
  * index: Default index file ("index.html").
  * host: Default host ("0.0.0.0").
  */
-Config::Config() : _serverName("own"), _root("./"), _index("index.html"), _clientMaxBodySize(1024 * 1024) // 1 MB default
+Config::Config() : _serverName(""), _root("./"), _index("index.html"), _clientMaxBodySize(1024L * 1024L) // 1 MB default
 {
 	std::cout << BOLD_GREEN << "Config default constructor called" << RESET << std::endl;
 }
@@ -107,7 +107,7 @@ std::string Config::getIndex() const
  * Gets the maximum allowed size for client request bodies.
  * @return The maximum allowed size in bytes.
  */
-size_t Config::getClientMaxBodySize() const
+long Config::getClientMaxBodySize() const
 {
 	return _clientMaxBodySize;
 }
@@ -174,9 +174,9 @@ void Config::setIndex(const std::string &index)
  * Sets the maximum allowed size for client request bodies.
  * @param size The maximum allowed size in bytes.
  */
-void Config::setClientMaxBodySize(size_t size)
+void Config::setClientMaxBodySize(long clientMaxBodySize)
 {
-	_clientMaxBodySize = size;
+	_clientMaxBodySize = clientMaxBodySize;
 }
 
 /**

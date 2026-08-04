@@ -16,7 +16,7 @@
  */
 Server::Server(const std::vector<Config> &configs)
 {
-	for (size_t i = 0; i < configs.size(); ++i) //LUNES Revisar por que no pone en defaultconfig el config cuando no viene server_name. Cambiar el own por ""
+	for (size_t i = 0; i < configs.size(); ++i)
 	{
 		const Config &config = configs[i];
 		for (size_t j = 0; j < config.getListens().size(); ++j)
