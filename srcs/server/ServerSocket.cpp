@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/04 10:42:34 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/10 16:50:09 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,7 @@
  * @param listen The listen configuration object.
  */
 ServerSocket::ServerSocket(const Listen &listen)
-	: _listen(&listen), _defaultConfig(NULL), _addrInfo(NULL), _serverSocketFd(-1)
+	: _listen(listen), _defaultConfig(NULL), _addrInfo(NULL), _serverSocketFd(-1)
 {
 	std::cout << BOLD_GREEN << "ServerSocket constructor called" << RESET << std::endl;
 }
@@ -79,7 +79,7 @@ void ServerSocket::setupAddressInfo()
 		hints; // Estructura que contiene información sobre el tipo de socket que queremos crear. La usamos para indicarle al sistema operativo qué tipo de socket queremos crear y cómo queremos que se comporte.
 	std::ostringstream portStream;
 
-	portStream << _listen->getPort();
+	portStream << _listen.getPort();
 	std::string port = portStream.str();
 
 	memset(&hints, 0, sizeof(hints));
@@ -89,7 +89,7 @@ void ServerSocket::setupAddressInfo()
 	hints.ai_socktype = SOCK_STREAM; // TCP socket
 	hints.ai_flags = AI_PASSIVE;	 // Socket will be used for binding
 
-	if (getaddrinfo(_listen->getInterface().c_str(), port.c_str(), &hints, &_addrInfo) !=
+	if (getaddrinfo(_listen.getInterface().c_str(), port.c_str(), &hints, &_addrInfo) !=
 		0) // (Parametros: host, port, hints(La receta de cómo queremos crear el socket), result (la estructura donde se guardará la info de la dirección. Mirar en http.md para entender la estructura addrinfo))
 	{
 		std::cerr << "Error getting address info" << std::endl;
@@ -136,7 +136,7 @@ void ServerSocket::bindSocket()
 		std::cerr << "Error binding socket" << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	std::cout << "Socket bound to port " << _listen->getPort() << std::endl;
+	std::cout << "Socket bound to port " << _listen.getPort() << std::endl;
 }
 
 /**
@@ -160,7 +160,7 @@ void ServerSocket::listenSocket()
  */
 const Listen &ServerSocket::getListen() const
 {
-	return *_listen;
+	return _listen;
 }
 
 /**
@@ -208,6 +208,16 @@ int ServerSocket::getserverSocketFd() const
 }
 
 /**
+ * Sets the listen configuration object for the server socket.
+ *
+ * @param listen The listen configuration object to set.
+ */
+void ServerSocket::setListen(const Listen &listen)
+{
+	_listen = listen;
+}
+
+/**
  * Adds a configuration object for a specific host to the server socket.
  *
  * @param host The hostname for which to add the configuration.
@@ -248,7 +258,7 @@ void ServerSocket::startServerSocket()
 void ServerSocket::print() const
 {
 	std::cout << BOLD_GREEN << "ServerSocket values:" << RESET << std::endl;
-	std::cout << "  Listening on port: " << _listen->getPort() << ", Interface: " << _listen->getInterface() << std::endl;
+	std::cout << "  Listening on port: " << _listen.getPort() << ", Interface: " << _listen.getInterface() << std::endl;
 	std::cout << "  Server socket descriptor: " << _serverSocketFd << std::endl;
 	std::cout << "  Configurations for hosts:" << std::endl;
 	for (std::map<std::string, const Config *>::const_iterator it = _configs.begin(); it != _configs.end(); ++it)

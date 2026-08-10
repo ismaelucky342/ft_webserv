@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:15:20 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/31 12:52:55 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/10 16:46:33 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,7 +18,7 @@
 class ServerSocket
 {
 private:
-	const Listen *_listen;
+	Listen _listen;
 	std::map<std::string, const Config *> _configs;
 	const Config *_defaultConfig;
 	struct addrinfo *_addrInfo;
@@ -45,6 +45,7 @@ public:
 	int getserverSocketFd() const;
 
 	//Setters
+	void setListen(const Listen &listen);
 	void addConfig(const Config &config);
 	void setDefaultConfig(const Config &config);
 

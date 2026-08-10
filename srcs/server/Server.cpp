@@ -19,17 +19,31 @@ Server::Server(const std::vector<Config> &configs)
 	for (size_t i = 0; i < configs.size(); ++i)
 	{
 		const Config &config = configs[i];
-		for (size_t j = 0; j < config.getListens().size(); ++j)
+		const std::vector<Listen> &confListens = config.getListens();
+
+		for (size_t j = 0; j < confListens.size(); ++j)
 		{
-			const Listen &listen = config.getListens()[j];
+			const Listen &listen = confListens[j];
 			ServerSocket *serverSocket = findServerSocket(listen);
-			if (serverSocket == NULL)
+			if (serverSocket == NULL) // No existe ningún ServerSocket compatible, así que creamos uno nuevo.
 			{
 				_serverSockets.push_back(ServerSocket(listen));
 				serverSocket = &_serverSockets.back();
-				serverSocket->setDefaultConfig(config);
+				serverSocket->setDefaultConfig(config); // El primero es el default provisional.
 			}
-			serverSocket->addConfig(config);
+			else
+			{
+				// Si el nuevo listen es 0.0.0.0 y el existente
+				// era una interfaz concreta, el wildcard tiene prioridad.
+				if (listen.getInterface() == "0.0.0.0" &&
+					serverSocket->getListen().getInterface() != "0.0.0.0")
+				{
+					serverSocket->setListen(listen); // Actualizamos el listen del ServerSocket existente al nuevo listen con la interfaz "0.0.0.0"
+					serverSocket->setDefaultConfig(config); // el config por defecto ahora es el del listen con la interfaz "0.0.0.0"
+				}
+			}
+			serverSocket->addConfig(config); // Añadimos la configuración al ServerSocket.
+
 		}
 	}
 }
@@ -472,8 +486,23 @@ ServerSocket *Server::findServerSocket(const Listen &listen)
 {
 	for (size_t i = 0; i < _serverSockets.size(); ++i)
 	{
-		if (_serverSockets[i].getListen() == listen) // Comparamos el objeto Listen del ServerSocket con el objeto Listen que estamos buscando. Si son iguales, significa que hemos encontrado el ServerSocket correspondiente.
+		const Listen &serverSocketListen = _serverSockets[i].getListen();
+
+		// Si el puerto es diferente, no puede ser el mismo socket.
+		if (listen.getPort() != serverSocketListen.getPort())
+			continue;
+
+		// Misma interfaz y mismo puerto.
+		if (listen.getInterface() == serverSocketListen.getInterface())
+			return &_serverSockets[i];
+
+		// Si ambos tienen el mismo puerto pero uno de los dos es interfaz 0.0.0.0, ese pasa a será el devuelto para modificarlo y hacerlo el serversocket con cubra a los demoas con ese puerto.
+		// Si listen.getInterface() == "0.0.0.0" el que devolvemos será el que modificaremos.
+		// Si serverSocketListen.getInterface() == "0.0.0.0" el que devolvemos sólo le añadiremos el nuevo config al map porque significa que el 0.0.0.0 ya existía.
+		if (listen.getInterface() == "0.0.0.0" ||
+			serverSocketListen.getInterface() == "0.0.0.0")
 			return &_serverSockets[i];
 	}
+
 	return NULL;
 }
