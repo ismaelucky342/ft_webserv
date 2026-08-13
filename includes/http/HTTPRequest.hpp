@@ -17,6 +17,7 @@ public:
 	const std::string &getQueryString() const;
 	const std::string &getVersion() const;
 	const std::map<std::string, std::string> &getHeaders() const;
+	const std::string getHeader(const std::string &key) const; // Se devuelve una copia del valor del header, ya que si devolvieramos una referencia a un string que no existe en el map, se produciría un error de acceso a memoria.
 	const std::string &getBody() const;
 	void setMethod(const std::string &method);
 	void setPath(const std::string &path);
@@ -24,6 +25,8 @@ public:
 	void setVersion(const std::string &version);
 	void setHeader(const std::string &key, const std::string &value);
 	void setBody(const std::string &newBody);
+
+	void print() const; // Method to print the HTTPRequest object for debugging purposes
 
 private:
 	std::string _method;

@@ -55,6 +55,7 @@ HTTPRequest HTTPRequestParser::parse(const std::string &rawRequest)
 {
 	HTTPRequest request;
 	parseRequestLine(request, rawRequest);
+	parseHeaders(request, rawRequest);
 	//IMP: Implement parseHeaders and parseBody methods to handle headers and body parsing.
 	return request;
 }
@@ -136,4 +137,42 @@ void HTTPRequestParser::parseVersion(HTTPRequest &request, const std::string &ve
 	if (version != "HTTP/1.1")
 		throw HTTPException(BAD_REQUEST);
 	request.setVersion(version);
+}
+
+/**
+ * Parses the headers of the HTTP request.
+ * 
+ * request: The HTTPRequest object to populate.
+ * rawRequest: The raw HTTP request string.
+ */
+void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &rawRequest) //IMP Mejorar el parseo aqui también. de momento para probar bien.
+{
+	std::istringstream rawStream(rawRequest);
+	std::string requestLine, headerLine;
+
+	if (!std::getline(rawStream, requestLine))
+		throw HTTPException(BAD_REQUEST);
+
+	while (std::getline(rawStream, headerLine) && headerLine != "\r")
+	{
+		// getline() elimina '\n', pero deja '\r'
+		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
+			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
+		
+		size_t colonPos = headerLine.find(':');
+		if (colonPos == std::string::npos)
+			throw HTTPException(BAD_REQUEST);
+
+		std::string key = headerLine.substr(0, colonPos);
+		if (key.empty()) //IMP: quizás validar que las nombres de los header sean validos o al menos que no tengan espacios dentro? No lo se.
+			throw HTTPException(BAD_REQUEST);
+		std::string value = headerLine.substr(colonPos + 1);
+
+		// Quitamos espacios y tabs del principio del valor
+		size_t start = value.find_first_not_of(" \t");
+		if (start != std::string::npos)
+			value.erase(0, start);
+
+		request.setHeader(key, value);
+	}
 }

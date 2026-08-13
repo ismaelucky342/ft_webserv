@@ -4,6 +4,7 @@
 #include <poll.h>
 #include <vector>
 #include <map>
+#include <string>
 #include "config/Config.hpp" //IMP: revisar si sobra algun include.
 #include "http/HTTPResponse.hpp"
 #include "http/HTTPRequest.hpp"
@@ -29,6 +30,7 @@ private:
 	Client &getClient(int clientSocket);
 	void disconnectClient(int clientSocket);
 	//Request handling
+	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket);
 	HTTPResponse handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket);
 	//Response handling
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType,

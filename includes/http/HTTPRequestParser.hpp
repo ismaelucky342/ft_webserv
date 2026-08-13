@@ -20,7 +20,7 @@ private:
 	void parseMethod(HTTPRequest &request, const std::string &method);
 	void parsePath(HTTPRequest &request, const std::string &path);
 	void parseVersion(HTTPRequest &request, const std::string &version);
-	// void				parseHeaders(HTTPRequest& request, const std::string& rawRequest);
+	void parseHeaders(HTTPRequest& request, const std::string& rawRequest);
 	// void				parseBody(HTTPRequest& request, const std::string& rawRequest);
 };
 

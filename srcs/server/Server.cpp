@@ -271,24 +271,13 @@ void Server::readFromClient(int clientSocket)
 	}
 	std::cout << "Request complete." << std::endl;
 	std::cout
-		<< "Request complete: " << client.getRecvBuffer()
-		<< std::
-			   endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
+		<< "Imprimiendo request: " << std::endl << client.getRecvBuffer() << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
 	try
 	{
 		HTTPRequest request = parser.parse(
 			client
-				.getRecvBuffer()); //Parseamos la peticion que hemos obtenido con el recv y la convertimos en un objeto HTTPRequest que nos permite acceder a los diferentes elementos de la peticion (metodo, path, version, headers, body)
-		//IMP: QUITAR ESTO DESPUÉS DE HACER PRUEBAS
-		// std::cout << "Parsed request: " << std::endl;
-		// std::cout << "Method: " << request.getMethod() << std::endl;
-		// std::cout << "Path: " << request.getPath() << std::endl;
-		// std::cout << "Version: " << request.getVersion() << std::endl;
-		// std::cout << "Headers: " << std::endl;
-		// for (std::map<std::string, std::string>::const_iterator it = request.getHeaders().begin(); it != request.getHeaders().end(); ++it)
-		// 	std::cout << it->first << ": " << it->second << std::endl;
-		// std::cout << "Body: " << request.getBody() << std::endl;
-		//IMP: QUITAR ESTO DESPUÉS DE HACER PRUEBAS
+				.getRecvBuffer()); //Parseamos la peticion y obtenemos un objeto HTTPRequest con los datos parseados. Esto implica leer la request line, los headers y el body de la peticion.
+		request.print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
 
 		client.getResponse() = handleRequest(
 			request,
@@ -376,6 +365,29 @@ void Server::disconnectClient(int clientSocket)
 }
 
 /**
+ * Gets the configuration for a specific host from the server socket.
+ * 
+ * @param host The host name to look for.
+ * @param serverSocket The server socket to search in.
+ * @return A pointer to the configuration object, or NULL if not found.
+ */
+const Config *Server::getConfigFromHost(const std::string &host, const ServerSocket &serverSocket)// IMP Revisar hecho rapido AQUIIIIII
+{
+	const Config *config = NULL;
+	if (!host.empty())
+	{	
+		size_t colonPos = host.find(':');
+		if (colonPos == std::string::npos)
+			throw HTTPException(BAD_REQUEST);
+		std::string interface = host.substr(0, colonPos);
+		config = serverSocket.getConfigForHost(interface);
+	}
+	if (config == NULL)
+		config = serverSocket.getDefaultConfig();
+	return config;
+}
+
+/**
  * Handles an HTTP request and generates an appropriate response.
  * 
  * @param request The HTTP request to handle.
@@ -384,13 +396,13 @@ void Server::disconnectClient(int clientSocket)
 HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket)
 {
 	std::string srcPath;
-	const Config &config = *serverSocket.getDefaultConfig(); //ATENCION SOLO PARA PROBAR: Obtenemos la configuracion por defecto del servidor que ha recibido la peticion. Esto es importante porque la configuracion contiene el root y el index que necesitamos para calcular la ruta del fichero a devolver.
+	const Config *config = getConfigFromHost(request.getHeader("Host"), serverSocket);
 
 	if (request.getPath() ==
 		"/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
-		srcPath = config.getRoot() + "/" + config.getIndex(); // el index por defecto
+		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
 	else
-		srcPath = config.getRoot() + request.getPath(); // la pagina solicitada
+		srcPath = config->getRoot() + request.getPath(); // la pagina solicitada
 
 	std::ifstream file_stream(srcPath.c_str());
 	if (!file_stream.is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/07 14:54:36 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/30 14:52:25 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/13 14:48:06 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -104,6 +104,20 @@ const std::map<std::string, std::string> &HTTPRequest::getHeaders() const
 }
 
 /**
+ * Returns a specific header from the request.
+ * 
+ * @param key The header key to look for.
+ * @return A reference to the header value string.
+ */
+const std::string HTTPRequest::getHeader(const std::string &key) const
+{
+	std::map<std::string, std::string>::const_iterator it = _headers.find(key);
+	if (it != _headers.end())
+		return it->second;
+	return std::string(); // Return an empty string if the header is not found
+}
+
+/**
  * Returns the body of the request.
  * 
  * @return A reference to the body string.
@@ -162,4 +176,20 @@ void HTTPRequest::setHeader(const std::string &key, const std::string &value)
 void HTTPRequest::setBody(const std::string &newBody)
 {
 	_body = newBody;
+}
+
+/**
+ * Prints the HTTPRequest object for debugging purposes.
+ */
+void HTTPRequest::print() const
+{
+	std::cout << BOLD_GREEN << "HTTPRequest values:" << RESET << std::endl;
+	std::cout << "Method: " << _method << std::endl;
+	std::cout << "Path: " << _path << std::endl;
+	// std::cout << "Query String: " << _queryString << std::endl;
+	std::cout << "Version: " << _version << std::endl;
+	std::cout << "Headers:" << std::endl;
+	for (std::map<std::string, std::string>::const_iterator it = _headers.begin(); it != _headers.end(); ++it)
+		std::cout << "  " << it->first << ": " << it->second << std::endl;
+	std::cout << "Body: " << _body << std::endl;
 }

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/10 16:50:09 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/13 16:19:26 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -181,6 +181,10 @@ const std::map<std::string, const Config *> &ServerSocket::getConfigs() const
  */
 const Config *ServerSocket::getConfigForHost(const std::string &host) const
 {
+	// std::cout << "Looking for host: [" << host << "]" << std::endl;
+	// for (std::map<std::string, const Config *>::const_iterator it = _configs.begin(); it != _configs.end(); ++it)
+	// 	std::cout << "Config key: [" << it->first << "]" << std::endl;
+
 	std::map<std::string, const Config *>::const_iterator it = _configs.find(host);
 	if (it != _configs.end())
 		return it->second;
@@ -227,6 +231,13 @@ void ServerSocket::addConfig(const Config &config)
 {
 	if (!config.getServerName().empty()) //chequeamos que el server_name no este vacio, porque si lo esta no tiene sentido añadirlo al map de configs.
 		_configs[config.getServerName()] = &config;
+	std::string interface = _listen.getInterface();
+	if (interface != "0.0.0.0")
+	{
+		_configs[_listen.getInterface()] = &config; // Añadimos la configuración al map con la direccion ip para evitar que se vaya por default si usamos la interfaz concreta.
+		if (interface == "127.0.0.1")
+			_configs["localhost"] = &config; // Añadimos la configuración al map con localhost para evitar que se vaya por default si usamos la interfaz concreta.
+	}
 }
 
 /**
