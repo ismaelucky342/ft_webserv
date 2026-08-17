@@ -281,8 +281,8 @@ void Server::readFromClient(int clientSocket)
 
 		client.getResponse() = handleRequest(
 			request,
-			client
-				.getServerSocket()); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
+			client.getServerSocket(),
+			client.getFd()); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
 		client.getSendBuffer() =
 			client.getResponse()
 				.serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
@@ -365,13 +365,42 @@ void Server::disconnectClient(int clientSocket)
 }
 
 /**
+ * Validates a configuration for a specific client checking the local address and port of the request.
+ * 
+ * @param config The configuration to validate.
+ * @param clientSocket The socket connected to the client.
+ * @return A pointer to the valid configuration object, or NULL if invalid.
+ */
+const Config *Server::isValidConfig(const Config *config, int clientSocket)
+{
+	struct sockaddr_in localAddr;
+	socklen_t addrLen = sizeof(localAddr);
+	if (getsockname(clientSocket, (struct sockaddr *)&localAddr, &addrLen)< 0)
+		throw HTTPException(INTERNAL_SERVER_ERROR);
+	std::string localInterface = inet_ntoa(localAddr.sin_addr);
+	int localPort = ntohs(localAddr.sin_port);
+	std::cout << "---------------------------------------------Local interface: " << localInterface << ", Local port: " << localPort << std::endl; //IMP: PARA DEBUG borrar luego.
+
+	const std::vector<Listen>& listens = config->getListens();
+	for (size_t i = 0; i < listens.size(); ++i)
+	{
+		const Listen &listen = listens[i];
+		if (listen.getPort() != localPort)
+			continue;
+		if (listen.getInterface() == "0.0.0.0" || listen.getInterface() == localInterface)
+			return config;
+	}
+	return NULL;
+}
+
+/**
  * Gets the configuration for a specific host from the server socket.
  * 
  * @param host The host name to look for.
  * @param serverSocket The server socket to search in.
  * @return A pointer to the configuration object, or NULL if not found.
  */
-const Config *Server::getConfigFromHost(const std::string &host, const ServerSocket &serverSocket)// IMP Revisar hecho rapido AQUIIIIII
+const Config *Server::getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket)// IMP Revisar hecho rapido AQUIIIIII
 {
 	const Config *config = NULL;
 	if (!host.empty())
@@ -384,7 +413,7 @@ const Config *Server::getConfigFromHost(const std::string &host, const ServerSoc
 	}
 	if (config == NULL)
 		config = serverSocket.getDefaultConfig();
-	return config;
+	return isValidConfig(config, clientSocket);
 }
 
 /**
@@ -393,10 +422,12 @@ const Config *Server::getConfigFromHost(const std::string &host, const ServerSoc
  * @param request The HTTP request to handle.
  * @return The HTTP response to send.
  */
-HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket)
+HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket, int clientSocket)
 {
 	std::string srcPath;
-	const Config *config = getConfigFromHost(request.getHeader("Host"), serverSocket);
+	const Config *config = getConfigFromHost(request.getHeader("Host"), serverSocket, clientSocket);
+	if (config == NULL)
+		throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
 
 	if (request.getPath() ==
 		"/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.

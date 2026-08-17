@@ -30,8 +30,9 @@ private:
 	Client &getClient(int clientSocket);
 	void disconnectClient(int clientSocket);
 	//Request handling
-	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket);
-	HTTPResponse handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket);
+	const Config *isValidConfig(const Config *config, int clientSocket);
+	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
+	HTTPResponse handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket, int clientSocket);
 	//Response handling
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType,
 								const std::string &body);
