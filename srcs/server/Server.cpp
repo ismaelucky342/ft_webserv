@@ -8,6 +8,7 @@
 #include "server/Server.hpp"
 #include <arpa/inet.h> // inet_ntoa(), inet_ntop(), inet_pton(), inet_addr()
 #include "http/HTTPException.hpp"
+#include "server/error.hpp"
 
 /**
  * Constructor for the Server class.
@@ -237,6 +238,7 @@ void Server::readFromClient(int clientSocket)
 	char buffer[4096];
 	Client &client = getClient(clientSocket);
 	HTTPRequestParser parser;
+	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 
 	ssize_t bytes =
 		recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
@@ -279,23 +281,17 @@ void Server::readFromClient(int clientSocket)
 				.getRecvBuffer()); //Parseamos la peticion y obtenemos un objeto HTTPRequest con los datos parseados. Esto implica leer la request line, los headers y el body de la peticion.
 		request.print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
 
-		client.getResponse() = handleRequest(
-			request,
-			client.getServerSocket(),
-			client.getFd()); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
-		client.getSendBuffer() =
-			client.getResponse()
-				.serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
-		setPollEvent(
-			clientSocket,
-			POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
+		config = getConfigFromHost(request.getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
+		if (config == NULL)
+			throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
+		
+		client.getResponse() = handleRequest(request, config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
+		client.getSendBuffer() = client.getResponse().serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
+		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
 	}
 	catch (const HTTPException &e)
 	{
-		client.getResponse() = createErrorResponse(
-			static_cast<HTTPStatus>(e.getStatusCode()),
-			client
-				.getServerSocket()); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
+		client.getResponse() = createErrorResponse(static_cast<HTTPStatus>(e.getStatusCode()), config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
 		client.getSendBuffer() = client.getResponse().serialize();
 		setPollEvent(clientSocket, POLLOUT);
 		return;
@@ -422,22 +418,18 @@ const Config *Server::getConfigFromHost(const std::string &host, const ServerSoc
  * @param request The HTTP request to handle.
  * @return The HTTP response to send.
  */
-HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket, int clientSocket)
+HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
 {
 	std::string srcPath;
-	const Config *config = getConfigFromHost(request.getHeader("Host"), serverSocket, clientSocket);
-	if (config == NULL)
-		throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
 
-	if (request.getPath() ==
-		"/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
+	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
 		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
 	else
 		srcPath = config->getRoot() + request.getPath(); // la pagina solicitada
 
 	std::ifstream file_stream(srcPath.c_str());
 	if (!file_stream.is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
-		return createErrorResponse(NOT_FOUND, serverSocket);
+		return createErrorResponse(NOT_FOUND, config);
 	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 	{
 		std::ostringstream bodystream;
@@ -478,28 +470,40 @@ HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &co
  * @param statusCode The HTTP status code.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const ServerSocket &serverSocket)
+HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const Config *config)
 {
-	const Config &config = *serverSocket.getDefaultConfig(); //ATENCION SOLO PARA PROBAR: Obtenemos la configuracion por defecto del servidor que ha recibido la peticion. Esto es importante porque la configuracion contiene el root y el index que necesitamos para calcular la ruta del fichero a devolver.
 	std::ostringstream errorPagePathStream;
 
-	errorPagePathStream << config.getRoot() << config.getErrorPage(statusCode);
+	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error estática con el código de error y el mensaje correspondiente.
+		errorPagePathStream << DEFAULT_ERROR_PAGES_PATH << statusCode << ".html";
+	else
+		errorPagePathStream << config->getRoot() << config->getErrorPage(statusCode);
+
 	std::ostringstream bodystream;
 
 	std::ifstream error_file_stream(errorPagePathStream.str().c_str());
-	if (!error_file_stream
-			 .is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
-	{
-		bodystream << statusCode << " " << getStatusMessage(statusCode);
-		std::string body = bodystream.str();
-		return createResponse(statusCode, "text/plain", body);
-	}
+	if (!error_file_stream.is_open()) // si no puede abrir la página de error o no existe, devolvemos una página de error estática con el código de error y el mensaje correspondiente.
+		return createDefaultErrorPage(statusCode);
 	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 	{
 		bodystream << error_file_stream.rdbuf();
 		std::string body = bodystream.str();
 		return createResponse(statusCode, "text/html", body);
 	}
+}
+
+/**
+ * Creates a default error page for the specified status code.
+ *
+ * @param statusCode The HTTP status code.
+ * @return The created HTTP response.
+ */
+HTTPResponse Server::createDefaultErrorPage(HTTPStatus statusCode)
+{
+	std::ostringstream bodystream;
+	bodystream << statusCode << " " << getStatusMessage(statusCode);
+	std::string body = bodystream.str();
+	return createResponse(statusCode, "text/plain", body);
 }
 
 /**

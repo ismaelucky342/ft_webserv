@@ -32,11 +32,11 @@ private:
 	//Request handling
 	const Config *isValidConfig(const Config *config, int clientSocket);
 	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
-	HTTPResponse handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket, int clientSocket);
+	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config);
 	//Response handling
-	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType,
-								const std::string &body);
-	HTTPResponse createErrorResponse(HTTPStatus statusCode, const ServerSocket &serverSocket);
+	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
+	HTTPResponse createErrorResponse(HTTPStatus statusCode, const Config *config);
+	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
 	ServerSocket *findServerSocket(const Listen &listen);
