@@ -39,6 +39,7 @@ private:
 	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
+	bool		 sameInterface(const std::string &interface1, const std::string &interface2) const;
 	ServerSocket *findServerSocket(const Listen &listen);
 
 public:

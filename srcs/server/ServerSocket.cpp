@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/13 16:19:26 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/24 16:23:28 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -174,18 +174,19 @@ const std::map<std::string, const Config *> &ServerSocket::getConfigs() const
 }
 
 /**
- * Gets the configuration object for a specific host associated with the server socket.
+ * Gets the configuration object for a specific key associated with the server socket.
  *
- * @param host The hostname for which to retrieve the configuration.
- * @return A pointer to the configuration object for the specified host, or NULL if not found.
+ * @param key The key for which to retrieve the configuration.
+ * @return A pointer to the configuration object for the specified key, or NULL if not found.
  */
-const Config *ServerSocket::getConfigForHost(const std::string &host) const
+const Config *ServerSocket::getConfigFromKey(const std::string &key) const
 {
+	// IMP BORRAR al final, Es para debuguear
 	// std::cout << "Looking for host: [" << host << "]" << std::endl;
 	// for (std::map<std::string, const Config *>::const_iterator it = _configs.begin(); it != _configs.end(); ++it)
 	// 	std::cout << "Config key: [" << it->first << "]" << std::endl;
 
-	std::map<std::string, const Config *>::const_iterator it = _configs.find(host);
+	std::map<std::string, const Config *>::const_iterator it = _configs.find(key);
 	if (it != _configs.end())
 		return it->second;
 	return NULL;
@@ -234,9 +235,14 @@ void ServerSocket::addConfig(const Config &config)
 	std::string interface = _listen.getInterface();
 	if (interface != "0.0.0.0")
 	{
-		_configs[_listen.getInterface()] = &config; // Añadimos la configuración al map con la direccion ip para evitar que se vaya por default si usamos la interfaz concreta.
-		if (interface == "127.0.0.1")
-			_configs["localhost"] = &config; // Añadimos la configuración al map con localhost para evitar que se vaya por default si usamos la interfaz concreta.
+		if (!getConfigFromKey(interface)) // Solo añadimos la configuración si no existe ya una configuración para esa interfaz en el map. De esta manera le damos prioridad al primer bloque server que aparece en el archivo de configuración.
+		{
+			_configs[_listen.getInterface()] = &config; // Añadimos la configuración al map con la direccion ip para evitar que se vaya por default si usamos la interfaz concreta.
+			if (interface == "127.0.0.1")
+				_configs["localhost"] = &config; // Como localhost es un alias de 127.0.0.1 si la interfaz es uno de los dos añadimos la configuración con el contrario para que funcione accediendo tanto con la ip coomo con el alias.
+			if (interface == "localhost")
+				_configs["127.0.0.1"] = &config; // Como localhost es un alias de 127.0.0.1 si la interfaz es uno de los dos añadimos la configuración con el contrario para que funcione accediendo tanto con la ip coomo con el alias.
+		}
 	}
 }
 

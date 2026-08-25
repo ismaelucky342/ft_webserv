@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:15:20 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/10 16:46:33 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/24 16:20:13 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,7 +40,7 @@ public:
 	//getters
 	const Listen &getListen() const;
 	const std::map<std::string, const Config *> &getConfigs() const;
-	const Config *getConfigForHost(const std::string &host) const;
+	const Config *getConfigFromKey(const std::string &key) const;
 	const Config *getDefaultConfig() const;
 	int getserverSocketFd() const;
 

@@ -383,7 +383,7 @@ const Config *Server::isValidConfig(const Config *config, int clientSocket)
 		const Listen &listen = listens[i];
 		if (listen.getPort() != localPort)
 			continue;
-		if (listen.getInterface() == "0.0.0.0" || listen.getInterface() == localInterface)
+		if (listen.getInterface() == "0.0.0.0" || sameInterface(listen.getInterface(), localInterface)) // Si la interfaz es la global (0.0.0.0) o si es la misma (localhost y 127.0.0.1 se consideran iguales), entonces el config es válido para este cliente.	
 			return config;
 	}
 	return NULL;
@@ -405,7 +405,7 @@ const Config *Server::getConfigFromHost(const std::string &host, const ServerSoc
 		if (colonPos == std::string::npos)
 			throw HTTPException(BAD_REQUEST);
 		std::string interface = host.substr(0, colonPos);
-		config = serverSocket.getConfigForHost(interface);
+		config = serverSocket.getConfigFromKey(interface);
 	}
 	if (config == NULL)
 		config = serverSocket.getDefaultConfig();
@@ -524,6 +524,24 @@ ServerSocket *Server::getServerSocketByFd(
 }
 
 /**
+ * Compares two interface strings to determine if they are the same. It also considers "localhost" and "127.0.0.1" as equivalent interfaces.
+ * 
+ * @param interface1 The first interface string.
+ * @param interface2 The second interface string.
+ * @return True if the interfaces are the same, false otherwise.
+ */
+bool Server::sameInterface(const std::string &interface1, const std::string &interface2) const
+{
+	if (interface1 == interface2)
+		return true;
+	if (interface1 == "localhost" && interface2 == "127.0.0.1")
+		return true;
+	if (interface1 == "127.0.0.1" && interface2 == "localhost")
+		return true;
+	return false;
+}
+
+/**
  * Finds a server socket corresponding to the given listen configuration.
  * 
  * @param listen The listen configuration to search for.
@@ -539,8 +557,8 @@ ServerSocket *Server::findServerSocket(const Listen &listen)
 		if (listen.getPort() != serverSocketListen.getPort())
 			continue;
 
-		// Misma interfaz y mismo puerto.
-		if (listen.getInterface() == serverSocketListen.getInterface())
+		// Misma interfaz y mismo puerto porque al llegar aqui ya hemos comprobado que el puerto es el mismo. Entonces comparamos las interfaces
+		if (sameInterface(listen.getInterface(), serverSocketListen.getInterface()))
 			return &_serverSockets[i];
 
 		// Si ambos tienen el mismo puerto pero uno de los dos es interfaz 0.0.0.0, ese pasa a será el devuelto para modificarlo y hacerlo el serversocket con cubra a los demoas con ese puerto.
