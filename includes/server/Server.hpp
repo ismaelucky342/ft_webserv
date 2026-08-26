@@ -23,12 +23,14 @@ private:
 	void initPoll();
 	void runLoop();
 	void setPollEvent(int clientSocket, short events);
+	void printPollFds() const; // IMP: Para depuracion y entender mejor. Muestra por pantalla los fds que estamos escuchando y sus eventos.
 	//Client handling
 	void acceptClient(ServerSocket &serverSocket);
 	void readFromClient(int clientSocket);
 	void writeToClient(int clientSocket);
 	Client &getClient(int clientSocket);
 	void disconnectClient(int clientSocket);
+	void updateClientKeepAlive(Client &client, const HTTPRequest &request);
 	//Request handling
 	const Config *isValidConfig(const Config *config, int clientSocket);
 	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);

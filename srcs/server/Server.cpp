@@ -132,9 +132,15 @@ void Server::runLoop()
 {
 	while (true)
 	{
+		std::cout << "---- BEFORE POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 		int pollCount = poll(
 			_pollFds.data(), _pollFds.size(),
 			-1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito)
+
+		std::cout << "---- AFTER POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		std::cout << "poll() returned " << pollCount << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 		if (pollCount == -1)
 		{
 			std::cerr << "Error in poll()" << std::endl;
@@ -197,6 +203,22 @@ void Server::setPollEvent(int clientSocket, short events)
 }
 
 /**
+ * Prints the poll file descriptors and their events for debugging purposes.
+ */
+void Server::printPollFds() const
+{
+	std::cout << "Poll FDs:" << std::endl;
+
+	for (size_t i = 0; i < _pollFds.size(); ++i)
+	{
+		std::cout << "  fd=" << _pollFds[i].fd
+				  << " events=" << _pollFds[i].events
+				  << " revents=" << _pollFds[i].revents
+				  << std::endl;
+	}
+}
+
+/**
  * Accepts a new client connection and adds it to the poll structure for monitoring.
  */
 void Server::acceptClient(ServerSocket &serverSocket)
@@ -243,6 +265,7 @@ void Server::readFromClient(int clientSocket)
 	ssize_t bytes =
 		recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
 	// bytes > 0: data received, bytes == 0: client disconnected in a good way, bytes < 0: error
+	std::cout << "recv() returned: " << bytes << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (bytes == 0)
 	{
 		std::cout << "Client disconnected." << std::endl;
@@ -280,6 +303,7 @@ void Server::readFromClient(int clientSocket)
 			client
 				.getRecvBuffer()); //Parseamos la peticion y obtenemos un objeto HTTPRequest con los datos parseados. Esto implica leer la request line, los headers y el body de la peticion.
 		request.print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
+		updateClientKeepAlive(client, request); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
 
 		config = getConfigFromHost(request.getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 		if (config == NULL)
@@ -358,6 +382,27 @@ void Server::disconnectClient(int clientSocket)
 		}
 	}
 	_clients.erase(clientSocket);
+}
+
+/**
+ * Sets the connection type (keep-alive or close) for a client based on the HTTP request headers.
+ * If the request is HTTP/1.1, the connection is persistent by default unless "Connection: close" is specified.
+ * If the request is HTTP/1.0, the connection is not persistent by default unless "Connection: keep-alive" is specified.
+ * 
+ * @param client The client object.
+ * @param request The HTTP request object.
+ */
+void Server::updateClientKeepAlive(Client &client, const HTTPRequest &request)
+{
+	std::string connection = request.getHeader("Connection");
+	std::string version = request.getVersion();
+
+	if (version == "HTTP/1.1")
+		client.setKeepAlive(connection != "close"); // En HTTP/1.1, la conexión es persistente por defecto, a menos que se indique "Connection: close".
+	else if (version == "HTTP/1.0")
+		client.setKeepAlive(connection == "keep-alive"); // En HTTP/1.0, la conexión no es persistente por defecto, a menos que se indique "Connection: keep-alive".
+	else
+		throw HTTPException(HTTP_VERSION_NOT_SUPPORTED); // Si la versión del protocolo no es ni HTTP/1.0 ni HTTP/1.1, lanzamos una excepción indicando que la versión no es soportada.
 }
 
 /**
