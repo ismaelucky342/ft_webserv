@@ -32,6 +32,7 @@ private:
 	void disconnectClient(int clientSocket);
 	void updateClientKeepAlive(Client &client, const HTTPRequest &request);
 	//Request handling
+	bool processNextRequest(int clientSocket);
 	const Config *isValidConfig(const Config *config, int clientSocket);
 	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
 	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config);

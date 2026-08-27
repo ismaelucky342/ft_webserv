@@ -14,6 +14,7 @@ public:
 
 	HTTPRequest parse(const std::string &rawRequest);
 	bool isRequestComplete(const std::string &buffer);
+	size_t getRequestEnd(const std::string &buffer);
 
 private:
 	void parseRequestLine(HTTPRequest &request, const std::string &rawRequest);

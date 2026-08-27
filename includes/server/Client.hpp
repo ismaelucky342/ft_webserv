@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:14:40 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 15:11:54 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/26 16:54:07 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,15 +21,16 @@
 class Client
 {
 private:
+	//Info del poropio cliente.
 	int _fd;
-	ServerSocket &
-		_serverSocket; //La referencia al serversocker al que pertenece el cliente. Esto es necesario para poder acceder a la configuracion del server desde el cliente, por ejemplo para obtener el root o el error_page.
+	ServerSocket &_serverSocket; //La referencia al serversocker al que pertenece el cliente. Esto es necesario para poder acceder a la configuracion del server desde el cliente, por ejemplo para obtener el root o el error_page.
 	std::string _recvBuffer;
+	bool _keepAlive;
+	//Para una petición concreta.
 	std::string _sendBuffer;
 	size_t _bytesSent;
 	HTTPRequest _request;
 	HTTPResponse _response;
-	bool _keepAlive;
 
 public:
 	Client(int clientFd, ServerSocket &serverSocket);

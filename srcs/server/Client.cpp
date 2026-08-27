@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 11:52:14 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/26 17:42:46 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,7 +21,7 @@
  * @param serverSocket The server socket to which the client is connected.
  */
 Client::Client(int clientFd, ServerSocket &serverSocket)
-	: _fd(clientFd), _serverSocket(serverSocket), _bytesSent(0), _keepAlive(false)
+	: _fd(clientFd), _serverSocket(serverSocket), _keepAlive(false), _bytesSent(0)
 {
 	std::cout << BOLD_GREEN << "Client constructor called" << RESET << std::endl;
 }
@@ -32,9 +32,9 @@ Client::Client(int clientFd, ServerSocket &serverSocket)
  * @param other The Client object to copy from.
  */
 Client::Client(const Client &other)
-	: _fd(other._fd), _serverSocket(other._serverSocket), _recvBuffer(other._recvBuffer),
-	  _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent), _request(other._request),
-	  _response(other._response), _keepAlive(other._keepAlive)
+	: _fd(other._fd), _serverSocket(other._serverSocket), _recvBuffer(other._recvBuffer), _keepAlive(other._keepAlive),
+	  _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent),_request(other._request),
+	  _response(other._response)
 {
 	std::cout << BOLD_GREEN << "Client copy constructor called" << RESET << std::endl;
 }
@@ -235,14 +235,12 @@ void Client::clearSendBuffer()
 }
 
 /**
- * Reset the client state, including buffers and request/response objects.
+ * Reset the client state, Only the attributes referring to the current request/response.
  */
 void Client::reset()
 {
-	_recvBuffer.clear();
 	_sendBuffer.clear();
 	_bytesSent = 0;
 	_request = HTTPRequest();
 	_response = HTTPResponse();
-	_keepAlive = false;
 }

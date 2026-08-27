@@ -72,6 +72,22 @@ bool HTTPRequestParser::isRequestComplete(const std::string &buffer)
 }
 
 /**
+ * Gets the position of the end of a HTTP request.
+ * 
+ * buffer: The buffer containing the raw HTTP request string.
+ * @return The position of the end of the first found request.
+ */
+size_t HTTPRequestParser::getRequestEnd(const std::string &buffer)
+{
+	size_t pos = buffer.find("\r\n\r\n");
+
+	if (pos == std::string::npos)
+		return std::string::npos;
+
+	return pos + 4;
+}
+
+/**
  * Parses the request line of the HTTP request.
  * 
  * request: The HTTPRequest object to populate.

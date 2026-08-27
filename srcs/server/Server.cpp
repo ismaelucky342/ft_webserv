@@ -147,8 +147,7 @@ void Server::runLoop()
 			continue;
 		}
 		for (
-			size_t i = 0; i < _pollFds.size();
-			++i) //Cuando ocurre un evento en cualquiera de los elementos en los que esta escuchando el poll, se sale y tenemos que recorrerlos con el bucle pasando por todos (incluso los que no tienen eventos activos en su revent.)
+			size_t i = 0; i < _pollFds.size(); ++i) //Cuando ocurre un evento en cualquiera de los elementos en los que esta escuchando el poll, se sale y tenemos que recorrerlos con el bucle pasando por todos (incluso los que no tienen eventos activos en su revent.)
 		{
 			struct pollfd &pfd = _pollFds[i];
 			ServerSocket *serverSocket = getServerSocketByFd(pfd.fd);
@@ -174,11 +173,9 @@ void Server::runLoop()
 					pfd.fd); // Si el error ocurre en un socket de cliente, desconectamos al cliente y seguimos con el bucle. Esto es importante porque si no hacemos esto, el poll se quedaria bloqueado esperando a que ocurra un evento en ese socket que ya no es valido y el servidor se quedaria colgado.
 				continue;
 			}
-			if (pfd.revents &
-				POLLIN) //  El socket del cliente tiene datos disponibles para ser leídos mediante recv().
+			if (pfd.revents & POLLIN) //  El socket del cliente tiene datos disponibles para ser leídos mediante recv().
 				readFromClient(pfd.fd);
-			if (pfd.revents &
-				POLLOUT) // El socket está listo para enviar datos al cliente mediante send().
+			if (pfd.revents & POLLOUT) // El socket está listo para enviar datos al cliente mediante send().
 				writeToClient(pfd.fd);
 		}
 	}
@@ -259,11 +256,8 @@ void Server::readFromClient(int clientSocket)
 {
 	char buffer[4096];
 	Client &client = getClient(clientSocket);
-	HTTPRequestParser parser;
-	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 
-	ssize_t bytes =
-		recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
+	ssize_t bytes = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
 	// bytes > 0: data received, bytes == 0: client disconnected in a good way, bytes < 0: error
 	std::cout << "recv() returned: " << bytes << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (bytes == 0)
@@ -279,47 +273,10 @@ void Server::readFromClient(int clientSocket)
 		return;
 	}
 	buffer[bytes] = '\0';
-	std::cout
-		<< "Request: " << buffer
-		<< std::
-			   endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
-	client.getRecvBuffer().append(
-		buffer,
-		bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+	std::cout << "Request received: " << buffer << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
+	client.getRecvBuffer().append(buffer, bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 
-	if (!parser.isRequestComplete(
-			client
-				.getRecvBuffer())) //Si la peticion no esta completa, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
-	{
-		std::cout << "Request not complete yet." << std::endl;
-		return;
-	}
-	std::cout << "Request complete." << std::endl;
-	std::cout
-		<< "Imprimiendo request: " << std::endl << client.getRecvBuffer() << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
-	try
-	{
-		HTTPRequest request = parser.parse(
-			client
-				.getRecvBuffer()); //Parseamos la peticion y obtenemos un objeto HTTPRequest con los datos parseados. Esto implica leer la request line, los headers y el body de la peticion.
-		request.print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
-		updateClientKeepAlive(client, request); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
-
-		config = getConfigFromHost(request.getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
-		if (config == NULL)
-			throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
-		
-		client.getResponse() = handleRequest(request, config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
-		client.getSendBuffer() = client.getResponse().serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
-		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
-	}
-	catch (const HTTPException &e)
-	{
-		client.getResponse() = createErrorResponse(static_cast<HTTPStatus>(e.getStatusCode()), config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
-		client.getSendBuffer() = client.getResponse().serialize();
-		setPollEvent(clientSocket, POLLOUT);
-		return;
-	}
+	processNextRequest(clientSocket);
 }
 
 void Server::writeToClient(int clientSocket)
@@ -327,21 +284,26 @@ void Server::writeToClient(int clientSocket)
 	Client &client = getClient(clientSocket);
 	std::string &sendBuffer = client.getSendBuffer();
 
-	ssize_t bytesSent = send(clientSocket, sendBuffer.c_str() + client.getBytesSent(),
-							 sendBuffer.size() - client.getBytesSent(), 0);
+	ssize_t bytesSent = send(
+		clientSocket,
+		sendBuffer.c_str() + client.getBytesSent(),
+		sendBuffer.size() - client.getBytesSent(),
+		0);
 	if (bytesSent < 0)
 	{
+		std::cerr << "Error sending data to client." << std::endl;
 		disconnectClient(clientSocket);
 		return;
 	}
 	client.addBytesSent(bytesSent);
-	std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client."
-			  << std::endl;
+	std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client." << std::endl;
+	//Si la respuesta no se ha enviado completamente, salimos y esperamos a que el socket del cliente esté listo para enviar más datos.
 	if (client.getBytesSent() < sendBuffer.size())
 	{
 		std::cout << "Response not fully sended yet." << std::endl;
 		return;
 	}
+	//Si la respuesta se ha enviado completamente.
 	if (client.isKeepAlive())
 	{
 		client.reset();
@@ -403,6 +365,48 @@ void Server::updateClientKeepAlive(Client &client, const HTTPRequest &request)
 		client.setKeepAlive(connection == "keep-alive"); // En HTTP/1.0, la conexión no es persistente por defecto, a menos que se indique "Connection: keep-alive".
 	else
 		throw HTTPException(HTTP_VERSION_NOT_SUPPORTED); // Si la versión del protocolo no es ni HTTP/1.0 ni HTTP/1.1, lanzamos una excepción indicando que la versión no es soportada.
+}
+
+bool Server::processNextRequest(int clientSocket)
+{
+	Client &client = getClient(clientSocket);
+	HTTPRequestParser parser;
+	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
+
+	size_t requestEnd = parser.getRequestEnd(client.getRecvBuffer());
+	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+	{
+		std::cout << "Request not complete yet." << std::endl;
+		return false;
+	}
+
+	std::string rawRequest = client.getRecvBuffer().substr(0, requestEnd); //Obtenemos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
+	client.getRecvBuffer().erase(0, requestEnd); //Eliminamos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
+	std::cout << "Request complete." << std::endl;
+	std::cout << "Imprimiendo request a procesar: " << std::endl << rawRequest << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
+	std::cout << "Imprimiendo resto de recvBuffer: " << std::endl << client.getRecvBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla el resto del buffer de recepcion del cliente y poder entenderlo. IMP: luego podemos quitarla.
+	try
+	{
+		HTTPRequest request = parser.parse(rawRequest); //Parseamos la peticion y obtenemos un objeto HTTPRequest con los datos parseados. Esto implica leer la request line, los headers y el body de la peticion.
+		request.print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
+		updateClientKeepAlive(client, request); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
+
+		config = getConfigFromHost(request.getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
+		if (config == NULL)
+			throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
+		
+		client.getResponse() = handleRequest(request, config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
+		client.getSendBuffer() = client.getResponse().serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
+		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
+		return true;
+	}
+	catch (const HTTPException &e)
+	{
+		client.getResponse() = createErrorResponse(static_cast<HTTPStatus>(e.getStatusCode()), config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
+		client.getSendBuffer() = client.getResponse().serialize();
+		setPollEvent(clientSocket, POLLOUT);
+		return true;
+	}
 }
 
 /**
