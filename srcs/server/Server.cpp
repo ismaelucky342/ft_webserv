@@ -304,12 +304,15 @@ void Server::writeToClient(int clientSocket)
 		return;
 	}
 	//Si la respuesta se ha enviado completamente.
-	if (client.isKeepAlive())
+	if (client.isKeepAlive()) // Si se mantiene vivo... Si no hay otra petición completa, cambiamos el evento a POLLIN para esperar a que llegue la siguiente petición.
 	{
-		client.reset();
+		client.reset(); //Reseteamos los campos de cliente necesarios para poder procesar peticiones.
+		if (processNextRequest(clientSocket)) // Comprobamos si hay otra petición completa en el buffer de recepción del cliente y la procesamos inmediatamente.
+			return; // Si hemos procesado nueva petición, salimos para volver a entrar en el bucle de eventos (el poll loop) y no acaparar el hilo de ejecución. Pero sigue con POLLOUT porque tendremos que enviar la respuesta de esta nueva petición.
+		// Si no hay otra petición completa, salimos al bucle de enventos pero esta vez primero camos en POLLIN para esperar a que llegue la siguiente petición.
 		setPollEvent(clientSocket, POLLIN);
 	}
-	else
+	else //Si no tiene que mantenerse vivo porque isKeepAlive() devuelve false, cerramos la conexión con el cliente.
 		disconnectClient(clientSocket);
 }
 
@@ -367,6 +370,12 @@ void Server::updateClientKeepAlive(Client &client, const HTTPRequest &request)
 		throw HTTPException(HTTP_VERSION_NOT_SUPPORTED); // Si la versión del protocolo no es ni HTTP/1.0 ni HTTP/1.1, lanzamos una excepción indicando que la versión no es soportada.
 }
 
+/**
+ * Processes the next HTTP request from a client's receive buffer.
+ * 
+ * @param clientSocket The socket connected to the client.
+ * @return True if a complete request was processed, false otherwise.
+ */
 bool Server::processNextRequest(int clientSocket)
 {
 	Client &client = getClient(clientSocket);
