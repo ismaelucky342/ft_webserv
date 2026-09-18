@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/24 16:23:28 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/18 11:22:32 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -237,7 +237,7 @@ void ServerSocket::addConfig(const Config &config)
 	{
 		if (!getConfigFromKey(interface)) // Solo añadimos la configuración si no existe ya una configuración para esa interfaz en el map. De esta manera le damos prioridad al primer bloque server que aparece en el archivo de configuración.
 		{
-			_configs[_listen.getInterface()] = &config; // Añadimos la configuración al map con la direccion ip para evitar que se vaya por default si usamos la interfaz concreta.
+			_configs[interface] = &config; // Añadimos la configuración al map con la direccion ip para evitar que se vaya por default si usamos la interfaz concreta.
 			if (interface == "127.0.0.1")
 				_configs["localhost"] = &config; // Como localhost es un alias de 127.0.0.1 si la interfaz es uno de los dos añadimos la configuración con el contrario para que funcione accediendo tanto con la ip coomo con el alias.
 			if (interface == "localhost")

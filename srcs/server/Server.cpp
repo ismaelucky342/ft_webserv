@@ -254,7 +254,7 @@ void Server::acceptClient(ServerSocket &serverSocket)
  */
 void Server::readFromClient(int clientSocket)
 {
-	char buffer[4096];
+	char buffer[10];
 	Client &client = getClient(clientSocket);
 
 	ssize_t bytes = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
