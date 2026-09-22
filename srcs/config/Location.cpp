@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 12:23:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 14:10:59 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 17:34:27 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -254,6 +254,16 @@ void Location::setRoot(const std::string& root)
 }
 
 /**
+ * Set the hasRoot flag of the location.
+ * 
+ * hasRoot: The hasRoot flag to set for the location.
+ */
+void Location::setHasRoot(bool hasRoot)
+{
+	_hasRoot = hasRoot;
+}
+
+/**
  * Set the index of the location.
  * 
  * index: The index to set for the location.
@@ -262,6 +272,16 @@ void Location::setIndex(const std::string& index)
 {
 	_index = index;
 	_hasIndex = true;
+}
+
+/**
+ * Set the hasIndex flag of the location.
+ * 
+ * hasIndex: The hasIndex flag to set for the location.
+ */
+void Location::setHasIndex(bool hasIndex)
+{
+	_hasIndex = hasIndex;
 }
 
 /**
@@ -276,6 +296,16 @@ void Location::setAutoindex(bool value)
 }
 
 /**
+ * Set the hasAutoindex flag of the location.
+ * 
+ * hasAutoindex: The hasAutoindex flag to set for the location.
+ */
+void Location::setHasAutoindex(bool hasAutoindex)
+{
+	_hasAutoindex = hasAutoindex;
+}
+
+/**
  * Add an allowed HTTP method for the location.
  * 
  * method: The HTTP method to add to the allowed methods.
@@ -283,6 +313,16 @@ void Location::setAutoindex(bool value)
 void Location::addAllowedMethod(HTTPMethod method)
 {
 	_allowedMethods.insert(method);
+}
+
+/**
+ * Set the hasAllowedMethods flag of the location.
+ * 
+ * hasAllowedMethods: The hasAllowedMethods flag to set for the location.
+ */
+void Location::setHasAllowedMethods(bool hasAllowedMethods)
+{
+	_hasAllowedMethods = hasAllowedMethods;
 }
 
 /**
@@ -299,6 +339,16 @@ void Location::setRedirect(int code, const std::string& target)
 }
 
 /**
+ * Set the hasRedirect flag of the location.
+ * 
+ * hasRedirect: The hasRedirect flag to set for the location.
+ */
+void Location::setHasRedirect(bool hasRedirect)
+{
+	_hasRedirect = hasRedirect;
+}
+
+/**
  * Set the upload store path for the location.
  *
  * path: The upload store path to set for the location.
@@ -307,6 +357,16 @@ void Location::setUploadStore(const std::string& path)
 {
 	_uploadStore = path;
 	_hasUploadStore = true;
+}
+
+/**
+ * Set the hasUploadStore flag of the location.
+ * 
+ * hasUploadStore: The hasUploadStore flag to set for the location.
+ */
+void Location::setHasUploadStore(bool hasUploadStore)
+{
+	_hasUploadStore = hasUploadStore;
 }
 
 /**
@@ -320,4 +380,14 @@ void Location::setCgi(const std::string& extension, const std::string& executabl
 	_cgiExtension = extension;
 	_cgiExecutable = executable;
 	_hasCgi = true;
+}
+
+/**
+ * Set the hasCgi flag of the location.
+ * 
+ * hasCgi: The hasCgi flag to set for the location.
+ */
+void Location::setHasCgi(bool hasCgi)
+{
+	_hasCgi = hasCgi;
 }

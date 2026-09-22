@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:28:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/04 11:19:26 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 16:29:27 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -196,6 +196,27 @@ void Config::addErrorPage(int errorCode, const std::string &errorPagePath)
 void Config::addLocation(const Location& location)
 {
 	_locations.push_back(location);
+}
+
+/**
+ * Finds the most specific Location that matches the given path.
+ * @param path The request path to match against the configured Locations.
+ * @return A pointer to the matching Location, or NULL if none is found.
+ */
+const Location* Config::findLocation(const std::string &path) const
+{
+	const Location* location = NULL;
+	
+	for (size_t i = 0; i < _locations.size(); ++i) // Por cada location del config...
+	{
+		std::string locationPath = _locations[i].getPath();
+		size_t locationPathLength = locationPath.length();
+
+		if (path.compare(0, locationPathLength, locationPath) == 0 && (path.length() == locationPathLength || path[locationPathLength] == '/')) // Si el path de la petición empieza por la location y es una ruta completa o termina en '/'. Con esto evitamos que coja como location una parcial, ej location /images para la petición /images2  X no valida X
+			if (location == NULL || locationPathLength > location->getPath().length()) // Si no hay location seleccionada o la nueva es más específica (más larga), la seleccionamos.
+				location = &_locations[i];
+	}
+	return location;
 }
 
 /**

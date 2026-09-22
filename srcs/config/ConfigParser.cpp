@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/31 14:28:17 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 17:55:54 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -164,13 +164,9 @@ void ConfigParser::expect(const std::string &token)
 Config ConfigParser::parseServer()
 {
 	Config config;
-	expect(
-		"server"); // Si el primer token no es "server", lanzamos un error porque sabemos que el archivo de conf esta mal formado. Si lo es, avanza al siguiente.
-	expect(
-		"{"); //Lo mismo qon la llave de apertura del bloque de configuracion del server. De esta manera vamos comprobando que este bien formado el archivo de configuracion.
-	while (
-		current() !=
-		"}") // Mientras no encontremos la llave de cierre del bloque de configuracion del server, seguimos parseando los tokens.
+	expect("server"); // Si el primer token no es "server", lanzamos un error porque sabemos que el archivo de conf esta mal formado. Si lo es, avanza al siguiente.
+	expect("{"); //Lo mismo qon la llave de apertura del bloque de configuracion del server. De esta manera vamos comprobando que este bien formado el archivo de configuracion.
+	while (current() != "}") // Mientras no encontremos la llave de cierre del bloque de configuracion del server, seguimos parseando los tokens.
 	{
 		if (current() ==
 			"listen") // Si el token es listen parseamos el puerto y la interfaz si se indica y lo guardamos en el objeto config.
@@ -178,11 +174,13 @@ Config ConfigParser::parseServer()
 		else if (current() == "server_name")
 			parseServerName(config);
 		else if (current() == "root")
-			parseRoot(config);
+			config.setRoot(parseRoot());
 		else if (current() == "index")
-			parseIndex(config);
+			config.setIndex(parseIndex());
 		else if (current() == "error_page")
 			parseErrorPage(config);
+		else if (current() == "location")
+			parseLocation(config);
 		else
 			parseOther();
 			// throw std::runtime_error("Unexpected token in server block: " + current());
@@ -247,15 +245,14 @@ void ConfigParser::parseServerName(Config &config)
  * 
  * config: The Config object to initialize.
  */
-void ConfigParser::parseRoot(Config &config)
+const std::string &ConfigParser::parseRoot()
 {
-	expect(
-		"root"); // Si el token actual es "root", avanzamos al siguiente token que debería ser la ruta raíz.
+	expect("root"); // Si el token actual es "root", avanzamos al siguiente token que debería ser la ruta raíz.
 	std::string root = current(); // Obtenemos el valor del token actual.
-	config.setRoot(root);		  // Establecemos la ruta raíz en el objeto config.
-	next();						  // Avanzamos al siguiente token, que debería ser el punto y coma.
-	expect(
-		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de raíz. SI no lo es lanzamos un error porque no estaria bien formado.
+	const std::string &rootRef = root; // Creamos una referencia constante a la cadena.
+	next();	// Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de raíz. SI no lo es lanzamos un error porque no estaria bien formado.
+	return rootRef;
 }
 
 /**
@@ -263,16 +260,14 @@ void ConfigParser::parseRoot(Config &config)
  * 
  * config: The Config object to initialize.
  */
-void ConfigParser::parseIndex(Config &config)
+const std::string &ConfigParser::parseIndex()
 {
-	expect(
-		"index"); // Si el token actual es "index", avanzamos al siguiente token que debería ser el nombre del archivo index.
-
+	expect("index"); // Si el token actual es "index", avanzamos al siguiente token que debería ser el nombre del archivo index.
 	std::string index = current(); // Obtenemos el valor del token actual.
-	config.setIndex(index);		   // Establecemos el nombre del archivo index en el objeto config.
+	const std::string &indexRef = index; // Creamos una referencia constante a la cadena.
 	next(); // Avanzamos al siguiente token, que debería ser el punto y coma.
-	expect(
-		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de index. SI no lo es lanzamos un error porque no estaria bien formado.
+	expect(";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de index. SI no lo es lanzamos un error porque no estaria bien formado.
+	return indexRef;
 }
 
 void ConfigParser::parseErrorPage(Config &config)
@@ -310,6 +305,78 @@ void ConfigParser::parseOther()
 	expect("}"); // Comprobamos que el siguiente token sea una llave de cierre, que indica el final del bloque. SI no lo es lanzamos un error porque no estaria bien formado.
 }
 
+/**
+ * Parses the location block.
+ * 
+ * config: The Config object to initialize.
+ */
+void ConfigParser::parseLocation(Config &config) //IMP BORRAR: Hay que ponerlo en parseServer y quizas devolver el location en lugar de meterlo aqui.
+{
+	expect("location"); // Si el token actual es "location", avanzamos al siguiente token que debería ser la ruta de la ubicación.
+	std::string locationPath = current(); // Obtenemos el valor del token actual.
+	Location location(locationPath); // Creamos un objeto Location con la ruta obtenida.
+	next(); // Avanzamos al siguiente token, que debería ser la llave de apertura del bloque de ubicación.
+	expect("{"); // Comprobamos que el siguiente token sea una llave de apertura, que indica el inicio del bloque de location. SI no lo es lanzamos un error porque no estaria bien formado
+	while (current() != "}") // Mientras no encontremos la llave de cierre del bloque de ubicación, seguimos parseando los tokens.
+	{
+		if (current() == "root")
+		{
+			location.setRoot(parseRoot());
+			location.setHasRoot(true);
+		}
+		else if (current() == "index")
+		{
+			location.setIndex(parseIndex());
+			location.setHasIndex(true);
+		}
+		else if (current() == "autoindex")
+			parseAutoindex(location);
+		else if (current() == "allow_methods")
+			parseAllowMethods(location);
+		else if (current() == "redirect")
+			parseRedirect(location);
+		else if (current() == "upload_store")
+			parseUploadStore(location);
+		else if (current() == "cgi")
+			parseCgi(location);
+		else
+			throw std::runtime_error("Unexpected token in location block: " + current());
+	}
+	config.addLocation(location);
+}
+
+/**
+ * Parses the autoindex directive.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseAutoindex(Location &location)
+{
+	expect("autoindex");
+	std::string autoindexValue = current();
+	if (autoindexValue == "on")
+		location.setAutoindex(true);
+	else if (autoindexValue == "off")
+		location.setAutoindex(false);
+	else
+		throw std::runtime_error("Invalid autoindex value: " + autoindexValue);
+	location.setHasAutoindex(true);
+	next();
+	expect(";");
+}
+
+void ConfigParser::parseAllowMethods(Location &location)
+{
+	expect("methods");
+	while (current() != ";")
+	{
+		std::string methodStr = current();
+		HTTPMethod method = stringToHTTPMethod(methodStr);
+		location.addAllowedMethod(method);
+		next();
+	}
+}
+
 long ConfigParser::strToLong(const std::string &str)
 {
 	char *end;
@@ -320,4 +387,21 @@ long ConfigParser::strToLong(const std::string &str)
 		'\0') // Si end no apunta al final de la cadena, significa que hubo caracteres no numéricos en el token actual, por lo que lanzamos un error.
 		throw std::runtime_error("Invalid number: " + str);
 	return value;
+}
+
+/**
+ * Converts a string to an HTTPMethod.
+ *
+ * method: The string to convert.
+ * Returns: The corresponding HTTPMethod.
+ */
+HTTPMethod stringToHTTPMethod(const std::string &method)
+{
+    if (method == "GET")
+        return GET;
+    if (method == "POST")
+        return POST;
+    if (method == "DELETE")
+        return DELETE;
+	throw std::runtime_error("Invalid HTTP method: " + method);
 }

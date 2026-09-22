@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:25:37 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/04 11:19:44 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 15:17:03 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,6 +45,8 @@ public:
 	void addErrorPage(int errorCode, const std::string &errorPagePath);
 	void addLocation(const Location& location);
 
+	const Location* findLocation(const std::string &path) const;
+	
 	void print() const;
 
 private:

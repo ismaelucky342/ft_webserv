@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 11:21:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 14:10:01 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 17:36:50 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,12 +45,19 @@ public:
 	const std::string &getCgiExecutable() const;
 
 	void setRoot(const std::string& root);
+	void setHasRoot(bool hasRoot);
 	void setIndex(const std::string& index);
+	void setHasIndex(bool hasIndex);
 	void setAutoindex(bool enabled);
+	void setHasAutoindex(bool hasAutoindex);
 	void addAllowedMethod(HTTPMethod method);
+	void setHasAllowedMethods(bool hasAllowedMethods);
 	void setRedirect(int code, const std::string& target);
+	void setHasRedirect(bool hasRedirect);
 	void setUploadStore(const std::string& path);
+	void setHasUploadStore(bool hasUploadStore);
 	void setCgi(const std::string& extension, const std::string& executable);
+	void setHasCgi(bool hasCgi);
 
 private:
 	std::string _path; //la ruta del url
