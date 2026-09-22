@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 12:51:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 11:39:48 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 11:24:30 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,6 +28,8 @@ std::string getStatusMessage(HTTPStatus status)
 		return "Created";
 	case NO_CONTENT:
 		return "No Content";
+	case MOVED_PERMANENTLY:
+		return "Moved Permanently";
 	case BAD_REQUEST:
 		return "Bad Request";
 	case FORBIDDEN:

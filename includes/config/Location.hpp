@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 11:21:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 12:03:22 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 14:10:01 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -33,6 +33,7 @@ public:
 	const std::string &getIndex() const;
 	bool hasAutoindex() const;
 	bool getAutoindex() const;
+	bool hasAllowedMethods() const;
 	const std::set<HTTPMethod> &getAllowedMethods() const;
 	bool hasRedirect() const;
 	int getRedirectCode() const;
@@ -52,18 +53,19 @@ public:
 	void setCgi(const std::string& extension, const std::string& executable);
 
 private:
-	std::string _path;
+	std::string _path; //la ruta del url
 
 	bool _hasRoot;
-	std::string _root;
+	std::string _root; // La ruta del equipo
 
-	bool _hasIndex;
+	bool _hasIndex; //Indica que hacer cuando la ruta es un directorio
 	std::string _index;
 
-	bool _hasAutoindex;
+	bool _hasAutoindex; //Indica si se puede hacer un listado de los ficheros del directorio en caso de que no haya un _index
 	bool _autoindex;
 
-	std::set<HTTPMethod> _allowedMethods;
+	bool _hasAllowedMethods; // NUEVO: Indica si se han definido métodos permitidos para esta location
+	std::set<HTTPMethod> _allowedMethods; //los métodos permitidos para esa location.
 
 	bool _hasRedirect;
 	int _redirectCode;

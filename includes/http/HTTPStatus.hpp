@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 11:17:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 11:38:53 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 11:21:59 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,10 @@ enum HTTPStatus
 	CREATED = 201,
 	NO_CONTENT = 204,
 
+	// 3xx redirection
+	MOVED_PERMANENTLY = 301,
+
+	// 4xx client errors
 	BAD_REQUEST = 400,
 	FORBIDDEN = 403,
 	NOT_FOUND = 404,
@@ -31,6 +35,7 @@ enum HTTPStatus
 	CONTENT_TOO_LARGE = 413,
 	URI_TOO_LONG = 414,
 
+	// 5xx server errors
 	INTERNAL_SERVER_ERROR = 500,
 	NOT_IMPLEMENTED = 501,
 	SERVICE_UNAVAILABLE = 503,

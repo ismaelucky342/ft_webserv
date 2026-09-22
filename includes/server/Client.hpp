@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:14:40 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/26 16:54:07 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 13:59:51 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,8 +29,6 @@ private:
 	//Para una petición concreta.
 	std::string _sendBuffer;
 	size_t _bytesSent;
-	HTTPRequest _request;
-	HTTPResponse _response;
 
 public:
 	Client(int clientFd, ServerSocket &serverSocket);
@@ -49,9 +47,6 @@ public:
 	const std::string &getSendBuffer() const;
 
 	size_t getBytesSent() const;
-
-	HTTPRequest &getRequest();
-	const HTTPRequest &getRequest() const;
 
 	HTTPResponse &getResponse();
 	const HTTPResponse &getResponse() const;

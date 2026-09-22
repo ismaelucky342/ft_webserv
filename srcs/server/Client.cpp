@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/26 17:42:46 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 14:06:00 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -33,8 +33,7 @@ Client::Client(int clientFd, ServerSocket &serverSocket)
  */
 Client::Client(const Client &other)
 	: _fd(other._fd), _serverSocket(other._serverSocket), _recvBuffer(other._recvBuffer), _keepAlive(other._keepAlive),
-	  _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent),_request(other._request),
-	  _response(other._response)
+	  _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent)
 {
 	std::cout << BOLD_GREEN << "Client copy constructor called" << RESET << std::endl;
 }
@@ -54,8 +53,6 @@ Client &Client::operator=(const Client &other)
 		_recvBuffer = other._recvBuffer;
 		_sendBuffer = other._sendBuffer;
 		_bytesSent = other._bytesSent;
-		_request = other._request;
-		_response = other._response;
 		_keepAlive = other._keepAlive;
 	}
 	std::cout << BOLD_GREEN << "Client assignment operator called" << RESET << std::endl;
@@ -141,46 +138,6 @@ size_t Client::getBytesSent() const
 }
 
 /**
- * Get the HTTP request for the client.
- * 
- * @return A reference to the HTTP request object.
- */
-HTTPRequest &Client::getRequest()
-{
-	return _request;
-}
-
-/**
- * Get the HTTP request for the client (const version).
- * 
- * @return A const reference to the HTTP request object.
- */
-const HTTPRequest &Client::getRequest() const
-{
-	return _request;
-}
-
-/**
- * Get the HTTP response for the client.
- * 
- * @return A reference to the HTTP response object.
- */
-HTTPResponse &Client::getResponse()
-{
-	return _response;
-}
-
-/**
- * Get the HTTP response for the client (const version).
- * 
- * @return A const reference to the HTTP response object.
- */
-const HTTPResponse &Client::getResponse() const
-{
-	return _response;
-}
-
-/**
  * Check if the client connection should be kept alive.
  * 
  * @return True if the connection should be kept alive, false otherwise.
@@ -239,8 +196,6 @@ void Client::clearSendBuffer()
  */
 void Client::reset()
 {
-	_sendBuffer.clear();
-	_bytesSent = 0;
-	_request = HTTPRequest();
-	_response = HTTPResponse();
+	clearSendBuffer();
+	resetBytesSent();
 }

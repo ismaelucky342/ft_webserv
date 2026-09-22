@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 12:23:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/29 12:55:45 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/22 14:10:59 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,7 +19,7 @@
  */
 Location::Location(const std::string &path)
 	: _path(path), _hasRoot(false), _hasIndex(false), _hasAutoindex(false),
-	  _hasRedirect(false), _hasUploadStore(false), _hasCgi(false) {}
+	  _hasAllowedMethods(false), _hasRedirect(false), _hasUploadStore(false), _hasCgi(false) {}
 
 
 /**
@@ -30,7 +30,8 @@ Location::Location(const std::string &path)
 Location::Location(const Location &other)
 	: _path(other._path), _hasRoot(other._hasRoot), _root(other._root),
 	  _hasIndex(other._hasIndex), _index(other._index), _hasAutoindex(other._hasAutoindex),
-	  _autoindex(other._autoindex), _allowedMethods(other._allowedMethods),
+	  _autoindex(other._autoindex), _hasAllowedMethods(other._hasAllowedMethods),
+	  _allowedMethods(other._allowedMethods),
 	  _hasRedirect(other._hasRedirect), _redirectCode(other._redirectCode),
 	  _redirectTarget(other._redirectTarget), _hasUploadStore(other._hasUploadStore),
 	  _uploadStore(other._uploadStore), _hasCgi(other._hasCgi),
@@ -52,6 +53,7 @@ Location &Location::operator=(const Location &other)
 		_index = other._index;
 		_hasAutoindex = other._hasAutoindex;
 		_autoindex = other._autoindex;
+		_hasAllowedMethods = other._hasAllowedMethods;
 		_allowedMethods = other._allowedMethods;
 		_hasRedirect = other._hasRedirect;
 		_redirectCode = other._redirectCode;
@@ -138,6 +140,16 @@ bool Location::hasAutoindex() const
 bool Location::getAutoindex() const
 {
 	return _autoindex;
+}
+
+/**
+ * Check if the location has allowed methods defined.
+ * 
+ * @return true if the location has allowed methods, false otherwise.
+ */
+bool Location::hasAllowedMethods() const
+{
+	return _hasAllowedMethods;
 }
 
 /**
