@@ -9,6 +9,7 @@
 #include <arpa/inet.h> // inet_ntoa(), inet_ntop(), inet_pton(), inet_addr()
 #include "http/HTTPException.hpp"
 #include "server/error.hpp"
+#include "colors.hpp"
 
 /**
  * Constructor for the Server class.
@@ -254,7 +255,7 @@ void Server::acceptClient(ServerSocket &serverSocket)
  */
 void Server::readFromClient(int clientSocket)
 {
-	char buffer[10];
+	char buffer[4096];
 	Client &client = getClient(clientSocket);
 
 	ssize_t bytes = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
@@ -479,6 +480,15 @@ const Config *Server::getConfigFromHost(const std::string &host, const ServerSoc
 HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
 {
 	std::string srcPath;
+
+	const Location *location = config->findLocation(request.getPath());
+	if (location == NULL)
+		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	else
+	{
+		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		location->print();
+	}
 
 	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
 		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto

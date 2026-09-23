@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:28:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/23 13:30:52 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 16:45:27 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -212,7 +212,7 @@ const Location* Config::findLocation(const std::string &path) const
 		std::string locationPath = _locations[i].getPath();
 		size_t locationPathLength = locationPath.length();
 
-		if (path.compare(0, locationPathLength, locationPath) == 0 && (path.length() == locationPathLength || path[locationPathLength] == '/')) // Si el path de la petición empieza por la location y es una ruta completa o termina en '/'. Con esto evitamos que coja como location una parcial, ej location /images para la petición /images2  X no valida X
+		if (locationPath == "/" || (path.compare(0, locationPathLength, locationPath) == 0 && (path.length() == locationPathLength || path[locationPathLength] == '/'))) //Si la location es "/" o Si el path de la petición empieza por la location y es una ruta completa o termina en '/'. Con esto evitamos que coja como location una parcial, ej location /images para la petición /images2  X no valida X
 			if (location == NULL || locationPathLength > location->getPath().length()) // Si no hay location seleccionada o la nueva es más específica (más larga), la seleccionamos.
 				location = &_locations[i];
 	}
