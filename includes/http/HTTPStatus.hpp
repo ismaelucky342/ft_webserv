@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 11:17:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 11:21:59 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 13:41:33 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #define HTTP_STATUS_HPP
 
 #include <string>
+#include <stdexcept>
 
 enum HTTPStatus
 {
@@ -42,6 +43,7 @@ enum HTTPStatus
 	HTTP_VERSION_NOT_SUPPORTED = 505
 };
 
-std::string getStatusMessage(HTTPStatus status);
+std::string	getStatusMessage(HTTPStatus status);
+HTTPStatus	stringToHTTPStatus(const std::string &statusString);
 
 #endif

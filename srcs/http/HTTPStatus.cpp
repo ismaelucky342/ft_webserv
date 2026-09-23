@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 12:51:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 11:24:30 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 11:37:50 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -57,4 +57,41 @@ std::string getStatusMessage(HTTPStatus status)
 	default:
 		return "Unknown Status Code";
 	}
+}
+
+HTTPStatus stringToHTTPStatus(const std::string &statusString)
+{
+	if (statusString == "200")
+		return OK;
+	else if (statusString == "201")
+		return CREATED;
+	else if (statusString == "204")
+		return NO_CONTENT;
+	else if (statusString == "301")
+		return MOVED_PERMANENTLY;
+	else if (statusString == "400")
+		return BAD_REQUEST;
+	else if (statusString == "403")
+		return FORBIDDEN;
+	else if (statusString == "404")
+		return NOT_FOUND;
+	else if (statusString == "405")
+		return METHOD_NOT_ALLOWED;
+	else if (statusString == "408")
+		return REQUEST_TIMEOUT;
+	else if (statusString == "411")
+		return LENGTH_REQUIRED;
+	else if (statusString == "413")
+		return CONTENT_TOO_LARGE;
+	else if (statusString == "414")
+		return URI_TOO_LONG;
+	else if (statusString == "500")
+		return INTERNAL_SERVER_ERROR;
+	else if (statusString == "501")
+		return NOT_IMPLEMENTED;
+	else if (statusString == "503")
+		return SERVICE_UNAVAILABLE;
+	else if (statusString == "505")
+		return HTTP_VERSION_NOT_SUPPORTED;
+	throw std::runtime_error("Invalid HTTP status code: " + statusString);
 }

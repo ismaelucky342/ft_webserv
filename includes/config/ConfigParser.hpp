@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 14:38:09 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 17:54:16 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 12:20:01 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,8 +37,8 @@ private:
 	Config parseServer();
 	void parseListen(Config &config);
 	void parseServerName(Config &config);
-	const std::string &parseRoot();
-	const std::string &parseIndex();
+	const std::string parseRoot();
+	const std::string parseIndex();
 	void parseErrorPage(Config &config);
 	void parseOther(); // BORRAR Auxiliar para imprimir los bloques que aun no parseo. Luego se eliminará
 	void parseLocation(Config &config); //Los de location para pruebas mientras unificamos.
@@ -49,7 +49,6 @@ private:
 	void parseCgi(Location &location);
 
 	long strToLong(const std::string &str); //IMP: Estas y la funcion de abajo tendremos que mantenerlas
-	HTTPMethod stringToHTTPMethod(const std::string &method);
 };
 
 #endif

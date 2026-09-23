@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 11:21:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 17:36:50 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 13:59:48 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,7 +14,9 @@
 #define LOCATION_HPP
 
 #include <string>
+#include <iostream>
 #include "http/HTTPMethods.hpp"
+#include "http/HTTPStatus.hpp"
 #include <set>
 
 class Location
@@ -45,19 +47,14 @@ public:
 	const std::string &getCgiExecutable() const;
 
 	void setRoot(const std::string& root);
-	void setHasRoot(bool hasRoot);
 	void setIndex(const std::string& index);
-	void setHasIndex(bool hasIndex);
 	void setAutoindex(bool enabled);
-	void setHasAutoindex(bool hasAutoindex);
 	void addAllowedMethod(HTTPMethod method);
-	void setHasAllowedMethods(bool hasAllowedMethods);
-	void setRedirect(int code, const std::string& target);
-	void setHasRedirect(bool hasRedirect);
+	void setRedirect(HTTPStatus code, const std::string& target);
 	void setUploadStore(const std::string& path);
-	void setHasUploadStore(bool hasUploadStore);
 	void setCgi(const std::string& extension, const std::string& executable);
-	void setHasCgi(bool hasCgi);
+
+	void print() const;
 
 private:
 	std::string _path; //la ruta del url
@@ -75,7 +72,7 @@ private:
 	std::set<HTTPMethod> _allowedMethods; //los métodos permitidos para esa location.
 
 	bool _hasRedirect;
-	int _redirectCode;
+	HTTPStatus _redirectCode; // NUEVO Cambio de tipo int (anterior) a tipo HTTPStatus (enum) para almacenar el código de redirección.
 	std::string _redirectTarget;
 
 	bool _hasUploadStore;

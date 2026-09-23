@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:28:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 16:29:27 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 13:30:52 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -238,5 +238,5 @@ void Config::print() const
 		std::cout << "    " << it->first << ": " << it->second << std::endl;
 	std::cout << "  Locations:" << std::endl;
 	for (size_t i = 0; i < _locations.size(); ++i)
-		std::cout << "    Path: " << _locations[i].getPath() << std::endl;
+		_locations[i].print();
 }

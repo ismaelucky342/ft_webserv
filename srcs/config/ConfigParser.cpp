@@ -6,13 +6,15 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 17:55:54 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 13:19:21 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "colors.hpp"
 #include "config/ConfigParser.hpp"
 #include "config/Listen.hpp"
+#include "config/Location.hpp"
+#include "http/HTTPMethods.hpp"
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
@@ -245,11 +247,11 @@ void ConfigParser::parseServerName(Config &config)
  * 
  * config: The Config object to initialize.
  */
-const std::string &ConfigParser::parseRoot()
+const std::string ConfigParser::parseRoot() // Devuelve una referencia a cadena porque de esta forma lo podemos reutilizar también para la root de los location.
 {
 	expect("root"); // Si el token actual es "root", avanzamos al siguiente token que debería ser la ruta raíz.
 	std::string root = current(); // Obtenemos el valor del token actual.
-	const std::string &rootRef = root; // Creamos una referencia constante a la cadena.
+	const std::string rootRef = root; // Creamos una referencia constante a la cadena.
 	next();	// Avanzamos al siguiente token, que debería ser el punto y coma.
 	expect(";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de raíz. SI no lo es lanzamos un error porque no estaria bien formado.
 	return rootRef;
@@ -260,11 +262,11 @@ const std::string &ConfigParser::parseRoot()
  * 
  * config: The Config object to initialize.
  */
-const std::string &ConfigParser::parseIndex()
+const std::string ConfigParser::parseIndex() // Devuelve una referencia a cadena porque de esta forma lo podemos reutilizar también para la index de los location.
 {
 	expect("index"); // Si el token actual es "index", avanzamos al siguiente token que debería ser el nombre del archivo index.
 	std::string index = current(); // Obtenemos el valor del token actual.
-	const std::string &indexRef = index; // Creamos una referencia constante a la cadena.
+	const std::string indexRef = index; // Creamos una referencia constante a la cadena.
 	next(); // Avanzamos al siguiente token, que debería ser el punto y coma.
 	expect(";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de index. SI no lo es lanzamos un error porque no estaria bien formado.
 	return indexRef;
@@ -321,32 +323,50 @@ void ConfigParser::parseLocation(Config &config) //IMP BORRAR: Hay que ponerlo e
 	{
 		if (current() == "root")
 		{
+			std::cout << BOLD_YELLOW "Parsing root directive in location: " << locationPath << RESET << std::endl;
 			location.setRoot(parseRoot());
-			location.setHasRoot(true);
 		}
 		else if (current() == "index")
 		{
+			std::cout << BOLD_YELLOW "Parsing index directive in location: " << locationPath << RESET << std::endl;
 			location.setIndex(parseIndex());
-			location.setHasIndex(true);
 		}
 		else if (current() == "autoindex")
+		{
+			std::cout << BOLD_YELLOW "Parsing autoindex directive in location: " << locationPath << RESET << std::endl;
 			parseAutoindex(location);
-		else if (current() == "allow_methods")
+		}
+		else if (current() == "methods")
+		{
+			std::cout << BOLD_YELLOW "Parsing methods directive in location: " << locationPath << RESET << std::endl;
 			parseAllowMethods(location);
-		else if (current() == "redirect")
+		}
+		else if (current() == "return")
+		{
+			std::cout << BOLD_YELLOW "Parsing return directive in location: " << locationPath << RESET << std::endl;
 			parseRedirect(location);
+		}
 		else if (current() == "upload_store")
+		{
+			std::cout << BOLD_YELLOW "Parsing upload_store directive in location: " << locationPath << RESET << std::endl;
 			parseUploadStore(location);
+		}
 		else if (current() == "cgi")
+		{
+			std::cout << BOLD_YELLOW "Parsing cgi directive in location: " << locationPath << RESET << std::endl;
 			parseCgi(location);
+		}
 		else
 			throw std::runtime_error("Unexpected token in location block: " + current());
 	}
+	expect("}"); // Comprobamos que el siguiente token sea una llave de cierre, que indica el final del bloque de location. SI no lo es lanzamos un error porque no estaria bien formado.
 	config.addLocation(location);
 }
 
 /**
  * Parses the autoindex directive.
+ * The autoindex directive specifies whether directory listing is enabled or disabled for a directory
+ * in case there is no index file.
  *
  * location: The Location object to configure.
  */
@@ -360,11 +380,15 @@ void ConfigParser::parseAutoindex(Location &location)
 		location.setAutoindex(false);
 	else
 		throw std::runtime_error("Invalid autoindex value: " + autoindexValue);
-	location.setHasAutoindex(true);
 	next();
 	expect(";");
 }
 
+/**
+ * Parses the allowed methods directive It adds the allowed methods to the set of allowed methods.
+ *
+ * location: The Location object to configure.
+ */
 void ConfigParser::parseAllowMethods(Location &location)
 {
 	expect("methods");
@@ -373,10 +397,67 @@ void ConfigParser::parseAllowMethods(Location &location)
 		std::string methodStr = current();
 		HTTPMethod method = stringToHTTPMethod(methodStr);
 		location.addAllowedMethod(method);
+		std::cout << BOLD_YELLOW "METODO INTRODUCIDO: " << methodStr << RESET << std::endl; // BORRAR: para debug
 		next();
 	}
+	std::cout << BOLD_YELLOW "FIN DE METODOS" << RESET << std::endl; // BORRAR: para debug
+	expect(";");
 }
 
+/**
+ * Parses the redirect directive.
+ * The redirect directive specifies a redirect to be sent to the client.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseRedirect(Location &location)
+{
+	expect("return");
+	HTTPStatus redirectCode = stringToHTTPStatus(current());
+	next();
+	location.setRedirect(redirectCode, current());
+	next();
+	expect(";");
+
+}
+
+/**
+ * Parses the upload_store directive.
+ * The upload_store directive specifies the directory where uploaded files will be stored.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseUploadStore(Location &location)
+{
+	expect("upload_store");
+	location.setUploadStore(current());
+	next();
+	expect(";");
+}
+
+/**
+ * Parses the CGI directive.
+ * The CGI directive specifies the extension and executable for CGI scripts.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseCgi(Location &location)
+{
+	expect("cgi");
+	std::string cgiExtension = current();
+	next();
+	std::string cgiExecutable = current();
+	location.setCgi(cgiExtension, cgiExecutable);
+	next();
+	expect(";");
+}
+
+/**
+ * Converts a string to a long.
+ *
+ * str: The string to convert.
+ * Returns: The corresponding long.
+ */
 long ConfigParser::strToLong(const std::string &str)
 {
 	char *end;
@@ -389,19 +470,3 @@ long ConfigParser::strToLong(const std::string &str)
 	return value;
 }
 
-/**
- * Converts a string to an HTTPMethod.
- *
- * method: The string to convert.
- * Returns: The corresponding HTTPMethod.
- */
-HTTPMethod stringToHTTPMethod(const std::string &method)
-{
-    if (method == "GET")
-        return GET;
-    if (method == "POST")
-        return POST;
-    if (method == "DELETE")
-        return DELETE;
-	throw std::runtime_error("Invalid HTTP method: " + method);
-}
