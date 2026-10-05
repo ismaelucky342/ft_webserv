@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/10 12:20:07 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/16 11:38:27 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/05 12:58:32 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@
 
 #include <string>
 #include <map>
+#include "http/HTTPStatus.hpp"
 
 class HTTPResponse
 {
@@ -28,7 +29,7 @@ public:
 	const std::string &getStatusMessage() const;
 	const std::map<std::string, std::string> &getHeaders() const;
 	const std::string &getBody() const;
-	void setStatusCode(int code);
+	void setStatusCode(HTTPStatus code);
 	void setStatusMessage(const std::string &message);
 	void setHeader(const std::string &key, const std::string &value);
 	void setBody(const std::string &newBody);
@@ -36,7 +37,7 @@ public:
 	std::string serialize() const;
 
 private:
-	int _statusCode;
+	HTTPStatus _statusCode;
 	std::string _statusMessage;
 	std::map<std::string, std::string> _headers;
 	std::string _body;

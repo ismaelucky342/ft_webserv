@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 11:21:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/23 13:59:48 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/05 12:55:04 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,7 +38,7 @@ public:
 	bool hasAllowedMethods() const;
 	const std::set<HTTPMethod> &getAllowedMethods() const;
 	bool hasRedirect() const;
-	int getRedirectCode() const;
+	HTTPStatus getRedirectCode() const;
 	const std::string &getRedirectTarget() const;
 	bool hasUploadStore() const;
 	const std::string &getUploadStore() const;

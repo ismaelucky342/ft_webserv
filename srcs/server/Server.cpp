@@ -490,6 +490,9 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 		location->print();
 	}
 
+	if (location != NULL && location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
+		return createRedirectResponse(location);
+
 	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
 		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
 	else
@@ -572,6 +575,16 @@ HTTPResponse Server::createDefaultErrorPage(HTTPStatus statusCode)
 	bodystream << statusCode << " " << getStatusMessage(statusCode);
 	std::string body = bodystream.str();
 	return createResponse(statusCode, "text/plain", body);
+}
+
+HTTPResponse Server::createRedirectResponse(const Location *location)
+{
+	HTTPResponse response;
+	response.setStatusCode(location->getRedirectCode());
+	response.setStatusMessage(getStatusMessage(location->getRedirectCode()));
+	response.setHeader("Location", location->getRedirectTarget());
+	response.setHeader("Content-Length", "0");
+	return response;
 }
 
 /**

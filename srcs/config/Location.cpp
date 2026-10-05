@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 12:23:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/23 13:37:25 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/05 12:55:23 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -177,7 +177,7 @@ bool Location::hasRedirect() const
  * 
  * @return The redirect code of the location.
  */
-int Location::getRedirectCode() const
+HTTPStatus Location::getRedirectCode() const
 {
 	return _redirectCode;
 }

@@ -40,6 +40,7 @@ private:
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
 	HTTPResponse createErrorResponse(HTTPStatus statusCode, const Config *config);
 	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
+	HTTPResponse createRedirectResponse(const Location *location);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
 	bool		 sameInterface(const std::string &interface1, const std::string &interface2) const;
