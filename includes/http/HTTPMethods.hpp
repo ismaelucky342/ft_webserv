@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 11:35:24 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/23 11:28:37 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/06 11:17:47 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,7 @@
 
 enum HTTPMethod
 {
+	METHOD_NONE,
 	GET,
 	POST,
 	DELETE

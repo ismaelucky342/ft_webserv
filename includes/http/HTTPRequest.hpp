@@ -3,6 +3,7 @@
 
 #include <string>
 #include <map>
+#include "http/HTTPMethods.hpp"
 
 class HTTPRequest
 {
@@ -12,14 +13,14 @@ public:
 	HTTPRequest &operator=(const HTTPRequest &other);
 	~HTTPRequest();
 
-	const std::string &getMethod() const;
+	HTTPMethod getMethod() const;
 	const std::string &getPath() const;
 	const std::string &getQueryString() const;
 	const std::string &getVersion() const;
 	const std::map<std::string, std::string> &getHeaders() const;
 	const std::string getHeader(const std::string &key) const; // Se devuelve una copia del valor del header, ya que si devolvieramos una referencia a un string que no existe en el map, se produciría un error de acceso a memoria.
 	const std::string &getBody() const;
-	void setMethod(const std::string &method);
+	void setMethod(HTTPMethod method);
 	void setPath(const std::string &path);
 	void setQueryString(const std::string &queryString);
 	void setVersion(const std::string &version);
@@ -29,7 +30,7 @@ public:
 	void print() const; // Method to print the HTTPRequest object for debugging purposes
 
 private:
-	std::string _method;
+	HTTPMethod _method;
 	std::string _path;
 	std::string _queryString;
 	std::string _version;

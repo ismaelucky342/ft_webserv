@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/07 14:54:36 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/13 14:48:06 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/06 11:32:24 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,7 +17,7 @@
 /**
  * Default constructor for the HTTPRequest class.
  */
-HTTPRequest::HTTPRequest() : _method(""), _path(""), _queryString(""), _version("")
+HTTPRequest::HTTPRequest() : _method(METHOD_NONE), _path(""), _queryString(""), _version("")
 {
 	std::cout << BOLD_GREEN << "HTTPRequest default constructor called" << RESET << std::endl;
 }
@@ -66,9 +66,9 @@ HTTPRequest::~HTTPRequest()
 /**
  * Returns the HTTP method of the request.
  * 
- * @return A reference to the HTTP method string.
+ * @return The HTTP method value.
  */
-const std::string &HTTPRequest::getMethod() const
+HTTPMethod HTTPRequest::getMethod() const
 {
 	return _method;
 }
@@ -130,9 +130,9 @@ const std::string &HTTPRequest::getBody() const
 /**
  * Sets the HTTP method of the request.
  * 
- * method: The HTTP method string to set.
+ * method: The HTTP method to set.
  */
-void HTTPRequest::setMethod(const std::string &method)
+void HTTPRequest::setMethod(HTTPMethod method)
 {
 	_method = method;
 }

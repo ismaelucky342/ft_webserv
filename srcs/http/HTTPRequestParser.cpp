@@ -56,7 +56,7 @@ HTTPRequest HTTPRequestParser::parse(const std::string &rawRequest)
 	HTTPRequest request;
 	parseRequestLine(request, rawRequest);
 	parseHeaders(request, rawRequest);
-	//IMP: Implement parseHeaders and parseBody methods to handle headers and body parsing.
+	//IMP: Implement parseBody methods to handle headers and body parsing.
 	return request;
 }
 
@@ -125,7 +125,7 @@ void HTTPRequestParser::parseMethod(HTTPRequest &request, const std::string &met
 {
 	if (method != "GET" && method != "POST" && method != "DELETE")
 		throw HTTPException(METHOD_NOT_ALLOWED);
-	request.setMethod(method);
+	request.setMethod(stringToHTTPMethod(method));
 }
 
 /**

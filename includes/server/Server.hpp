@@ -36,6 +36,7 @@ private:
 	const Config *isValidConfig(const Config *config, int clientSocket);
 	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
 	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config);
+	bool isMethodAllowed(const HTTPRequest &request, const Location *location);
 	//Response handling
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
 	HTTPResponse createErrorResponse(HTTPStatus statusCode, const Config *config);

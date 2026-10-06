@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 12:23:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/05 12:55:23 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/06 11:40:40 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -340,6 +340,9 @@ void Location::print() const
 		{
 			switch (*it)
 			{
+				case METHOD_NONE:
+					std::cout << "METHOD_NONE ";
+					break;
 				case GET:
 					std::cout << "GET ";
 					break;

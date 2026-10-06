@@ -493,6 +493,9 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	if (location != NULL && location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
 		return createRedirectResponse(location);
 
+	if (location != NULL && !isMethodAllowed(request, location)) // Si la location no permite el método de la petición, devolvemos un error 405 Method Not Allowed.
+		return createErrorResponse(METHOD_NOT_ALLOWED, config);
+
 	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
 		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
 	else
@@ -508,6 +511,18 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 		std::string body = bodystream.str();
 		return createResponse(OK, "text/html", body);
 	}
+}
+
+bool Server::isMethodAllowed(const HTTPRequest &request, const Location *location)
+{
+	if (location == NULL)
+		return false; // QUizas una exception?
+	const std::set<HTTPMethod> &allowedMethods = location->getAllowedMethods();
+	if (allowedMethods.empty())
+		return true; // Si no hay métodos permitidos especificados, se permite cualquier método.
+	if (allowedMethods.find(request.getMethod()) != allowedMethods.end())
+		return true;
+	return false;
 }
 
 /**
@@ -577,6 +592,12 @@ HTTPResponse Server::createDefaultErrorPage(HTTPStatus statusCode)
 	return createResponse(statusCode, "text/plain", body);
 }
 
+/**
+ *  Creates an HTTP redirect response based on the specified location.
+ * 
+ * @param location The location object containing the redirect information.
+ * @return The created HTTP response.
+ */
 HTTPResponse Server::createRedirectResponse(const Location *location)
 {
 	HTTPResponse response;
