@@ -4,6 +4,7 @@
 #include <sstream>		// std::ostringstream
 #include <sys/socket.h> // socket(), bind(), listen(), accept(), send(), recv()
 #include <netinet/in.h> // sockaddr_in, htons(), ntohs(), INADDR_ANY
+#include <sys/stat.h> // stat() Para obtener info de un archivo (tipo, tamaño, permisos, etc.)
 
 #include "server/Server.hpp"
 #include <arpa/inet.h> // inet_ntoa(), inet_ntop(), inet_pton(), inet_addr()
@@ -480,38 +481,127 @@ const Config *Server::getConfigFromHost(const std::string &host, const ServerSoc
 HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
 {
 	std::string srcPath;
-
+	struct stat fileInfo;
 	const Location *location = config->findLocation(request.getPath());
+	std::string root = config->getRoot();
+	std::string index = config->getIndex();
+	
 	if (location == NULL)
 		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
-	else
+	if (location != NULL)
 	{
 		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		location->print();
+		if (location->hasRedirect())
+			return createRedirectResponse(location->getRedirectCode(), location->getRedirectTarget());
+		if (!isMethodAllowed(request, location)) // Si la location no permite el método de la petición, devolvemos un error 405 Method Not Allowed.
+			return createErrorResponse(METHOD_NOT_ALLOWED, config);
+		if (location->hasRoot())
+			root = location->getRoot();
+		if (location->hasIndex())
+			index = location->getIndex();
 	}
-
-	if (location != NULL && location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
-		return createRedirectResponse(location);
-
-	if (location != NULL && !isMethodAllowed(request, location)) // Si la location no permite el método de la petición, devolvemos un error 405 Method Not Allowed.
-		return createErrorResponse(METHOD_NOT_ALLOWED, config);
-
-	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
-		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
-	else
-		srcPath = config->getRoot() + request.getPath(); // la pagina solicitada
-
-	std::ifstream file_stream(srcPath.c_str());
-	if (!file_stream.is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
-		return createErrorResponse(NOT_FOUND, config);
-	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+	srcPath = root + request.getPath();
+	std::cout << "ROOT: " << root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	std::cout << "PATH: " << request.getPath() << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	std::cout << "SRC: " << srcPath << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
 	{
-		std::ostringstream bodystream;
-		bodystream << file_stream.rdbuf();
-		std::string body = bodystream.str();
-		return createResponse(OK, "text/html", body);
+		if (errno == ENOENT) // Si el error es que no existe el fichero o directorio, devolvemos un error 404 Not Found.
+			return createErrorResponse(NOT_FOUND, config);
+		if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
+			return createErrorResponse(FORBIDDEN, config);
+		else // Si el error es otro, devolvemos un error 500 Internal Server Error.
+			return createErrorResponse(INTERNAL_SERVER_ERROR, config);
 	}
+	if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
+	{
+		std::ifstream file_stream(srcPath.c_str());
+		if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
+			return createErrorResponse(FORBIDDEN, config);
+		else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+		{
+			std::ostringstream bodystream;
+			bodystream << file_stream.rdbuf();
+			std::string body = bodystream.str();
+			return createResponse(OK, getContentType(srcPath), body);
+		}
+	}
+	else if (S_ISDIR(fileInfo.st_mode)) // SI es un directorio,
+	{
+		if (request.getPath()[request.getPath().length() - 1] != '/') // Si la ruta no termina en '/', devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL con '/' al final.
+			return createRedirectResponse(MOVED_PERMANENTLY, request.getPath() + "/");
+		else // Si la ruta termina en '/', buscamos el index del directorio y lo devolvemos como respuesta.
+		{
+			srcPath += index;
+			if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
+			{
+				if (errno == ENOENT) // El archivo index configurado no existe.
+				{
+					if (location != NULL && location->getAutoindex()) // Si la location tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
+						return createAutoIndexResponse(request.getPath());
+					else
+						return createErrorResponse(FORBIDDEN, config); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
+				}
+				if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
+					return createErrorResponse(FORBIDDEN, config);
+				else // Si el error es otro, devolvemos un error 500 Internal Server Error.
+					return createErrorResponse(INTERNAL_SERVER_ERROR, config);
+			}
+			if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
+			{
+				std::ifstream file_stream(srcPath.c_str());
+				if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
+					return createErrorResponse(FORBIDDEN, config);
+				else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+				{
+					std::ostringstream bodystream;
+					bodystream << file_stream.rdbuf();
+					std::string body = bodystream.str();
+					return createResponse(OK, getContentType(srcPath), body);
+				}
+			}
+			return createErrorResponse(FORBIDDEN, config);
+		}
+	}
+	return createErrorResponse(FORBIDDEN, config);
 }
+
+// HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
+// {
+// 	std::string srcPath;
+
+// 	const Location *location = config->findLocation(request.getPath());
+// 	if (location == NULL)
+// 		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+// 	else
+// 	{
+// 		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+// 		location->print();
+// 	}
+
+// 	if (location != NULL && location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
+// 		return createRedirectResponse(location);
+
+// 	if (location != NULL && !isMethodAllowed(request, location)) // Si la location no permite el método de la petición, devolvemos un error 405 Method Not Allowed.
+// 		return createErrorResponse(METHOD_NOT_ALLOWED, config);
+
+// 	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
+// 		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
+// 	else
+// 		srcPath = config->getRoot() + request.getPath(); // la pagina solicitada
+
+// 	std::ifstream file_stream(srcPath.c_str());
+// 	if (!file_stream.is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
+// 		return createErrorResponse(NOT_FOUND, config);
+// 	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+// 	{
+// 		std::ostringstream bodystream;
+// 		bodystream << file_stream.rdbuf();
+// 		std::string body = bodystream.str();
+// 		return createResponse(OK, getContentType(srcPath), body);
+// 	}
+// }
 
 bool Server::isMethodAllowed(const HTTPRequest &request, const Location *location)
 {
@@ -574,7 +664,7 @@ HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const Config *co
 	{
 		bodystream << error_file_stream.rdbuf();
 		std::string body = bodystream.str();
-		return createResponse(statusCode, "text/html", body);
+		return createResponse(statusCode, getContentType(errorPagePathStream.str()), body);
 	}
 }
 
@@ -598,14 +688,29 @@ HTTPResponse Server::createDefaultErrorPage(HTTPStatus statusCode)
  * @param location The location object containing the redirect information.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createRedirectResponse(const Location *location)
+HTTPResponse Server::createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget)
 {
 	HTTPResponse response;
-	response.setStatusCode(location->getRedirectCode());
-	response.setStatusMessage(getStatusMessage(location->getRedirectCode()));
-	response.setHeader("Location", location->getRedirectTarget());
+	response.setStatusCode(statusCode);
+	response.setStatusMessage(getStatusMessage(statusCode));
+	response.setHeader("Location", redirectTarget);
 	response.setHeader("Content-Length", "0");
 	return response;
+}
+
+/**
+ * Generates an autoindex page for the specified source path and request path.
+ *
+ * @param srcPath The source path of the directory.
+ * @param requestPath The request path.
+ * @return The generated autoindex page.
+ */
+HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
+{
+	std::ostringstream bodystream;
+	bodystream << "<html><head><title>Index of " << requestPath << "</title></head><body>";
+	std::string body = bodystream.str();
+	return createResponse(OK, "text/plain", body);
 }
 
 /**
@@ -670,6 +775,40 @@ ServerSocket *Server::findServerSocket(const Listen &listen)
 			serverSocketListen.getInterface() == "0.0.0.0")
 			return &_serverSockets[i];
 	}
-
 	return NULL;
+}
+
+/**
+ * Determines the content type based on the file extension of the given path.
+ * 
+ * @param path The file path to analyze.
+ * @return The corresponding content type as a string.
+ */
+std::string Server::getContentType(const std::string &path) const
+{
+	size_t pos = path.find_last_of('.');
+	if (pos == std::string::npos)
+		return "application/octet-stream"; // Default content type if no extension is found
+	std::string extension = path.substr(pos + 1);
+	if (extension == "html" || extension == "htm")
+		return "text/html";
+	else if (extension == "css")
+		return "text/css";
+	else if (extension == "js")
+		return "application/javascript";
+	else if (extension == "json")
+		return "application/json";
+	else if (extension == "jpg" || extension == "jpeg")
+		return "image/jpeg";
+	else if (extension == "png")
+		return "image/png";
+	else if (extension == "gif")
+		return "image/gif";
+	else if (extension == "txt")
+		return "text/plain";
+	else if (extension == "pdf")
+		return "application/pdf";
+	else if (extension == "ico")
+		return "image/x-icon";
+	return "application/octet-stream"; // Default content type if no extension is found
 }

@@ -41,11 +41,14 @@ private:
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
 	HTTPResponse createErrorResponse(HTTPStatus statusCode, const Config *config);
 	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
-	HTTPResponse createRedirectResponse(const Location *location);
+	HTTPResponse createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget);
+	HTTPResponse createAutoIndexResponse(const std::string &requestPath);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
 	bool		 sameInterface(const std::string &interface1, const std::string &interface2) const;
 	ServerSocket *findServerSocket(const Listen &listen);
+	// Other private methods for server functionality can be added here
+	std::string getContentType(const std::string &path) const;
 
 public:
 	Server(const std::vector<Config> &configs);
