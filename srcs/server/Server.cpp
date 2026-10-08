@@ -494,13 +494,13 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 		location->print();
 		if (location->hasRedirect())
 			return createRedirectResponse(location->getRedirectCode(), location->getRedirectTarget());
-		if (!isMethodAllowed(request, location)) // Si la location no permite el método de la petición, devolvemos un error 405 Method Not Allowed.
-			return createErrorResponse(METHOD_NOT_ALLOWED, config);
 		if (location->hasRoot())
 			root = location->getRoot();
 		if (location->hasIndex())
 			index = location->getIndex();
 	}
+	if (!isMethodAllowed(request, location)) // Si no se permite el método, devolvemos un error 405 Method Not Allowed.
+		return createErrorResponse(METHOD_NOT_ALLOWED, config);
 	srcPath = root + request.getPath();
 	std::cout << "ROOT: " << root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::cout << "PATH: " << request.getPath() << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
@@ -603,16 +603,21 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 // 	}
 // }
 
+/**
+ * Checks if the request method is allowed for the given location. 
+ * If there is no location to define the allowed methods, Only GET is allowed by default.
+ * If the location has defined allowed methods, it checks if the request method is in the set of allowed methods.
+ * 
+ * @param request The HTTP request.
+ * @param location The location to check.
+ * @return true if the method is allowed, false otherwise.
+ */
 bool Server::isMethodAllowed(const HTTPRequest &request, const Location *location)
 {
-	if (location == NULL)
-		return false; // QUizas una exception?
-	const std::set<HTTPMethod> &allowedMethods = location->getAllowedMethods();
-	if (allowedMethods.empty())
-		return true; // Si no hay métodos permitidos especificados, se permite cualquier método.
-	if (allowedMethods.find(request.getMethod()) != allowedMethods.end())
-		return true;
-	return false;
+	if (location == NULL || !location->hasAllowedMethods()) //Si no se encontró location para la petición o si la location encontrada no tiene metodos definidos, entonces selo admitimos GET por defecto.
+		return (request.getMethod() == GET);
+	const std::set<HTTPMethod> &allowedMethods = location->getAllowedMethods(); // SI existen methods definidos en la location, comprobamos si el metodo de la peticion esta en el set de metodos permitidos.
+	return (allowedMethods.find(request.getMethod()) != allowedMethods.end());
 }
 
 /**
