@@ -19,6 +19,7 @@ CUT			=	\033[K
 
 #source files
 SRC_FILES	=	main.cpp \
+				StringUtils.cpp \
 				server/Server.cpp \
 				server/ServerSocket.cpp \
 				server/Client.cpp \

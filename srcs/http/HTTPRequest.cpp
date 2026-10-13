@@ -6,13 +6,14 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/07 14:54:36 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/06 11:32:24 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/09 15:21:52 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "http/HTTPRequest.hpp"
 #include <iostream>
 #include "colors.hpp"
+#include "StringUtils.hpp"
 
 /**
  * Default constructor for the HTTPRequest class.
@@ -111,7 +112,7 @@ const std::map<std::string, std::string> &HTTPRequest::getHeaders() const
  */
 const std::string HTTPRequest::getHeader(const std::string &key) const
 {
-	std::map<std::string, std::string>::const_iterator it = _headers.find(key);
+	std::map<std::string, std::string>::const_iterator it = _headers.find(StringUtils::toLowerString(key));
 	if (it != _headers.end())
 		return it->second;
 	return std::string(); // Return an empty string if the header is not found

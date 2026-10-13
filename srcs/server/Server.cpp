@@ -384,7 +384,7 @@ bool Server::processNextRequest(int clientSocket)
 	HTTPRequestParser parser;
 	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 
-	size_t requestEnd = parser.getRequestEnd(client.getRecvBuffer());
+	size_t requestEnd = parser.getHeadersEnd(client.getRecvBuffer());
 	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 	{
 		std::cout << "Request not complete yet." << std::endl;

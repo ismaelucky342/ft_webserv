@@ -4,6 +4,7 @@
 #include "colors.hpp"
 #include "http/HTTPException.hpp"
 #include "http/HTTPStatus.hpp"
+#include "StringUtils.hpp"
 
 /**
  * Default constructor for the HTTPRequestParser class.
@@ -61,14 +62,19 @@ HTTPRequest HTTPRequestParser::parse(const std::string &rawRequest)
 }
 
 /**
- * Checks if the HTTP request is complete.
+ * Gets the position of the end of the headers in a HTTP request.
  * 
  * buffer: The buffer containing the raw HTTP request string.
- * @return True if the request is complete, false otherwise.
+ * @return The position of the end of the first found request.
  */
-bool HTTPRequestParser::isRequestComplete(const std::string &buffer)
+size_t HTTPRequestParser::getHeadersEnd(const std::string &buffer)
 {
-	return buffer.find("\r\n\r\n") != std::string::npos; // Check for the end of headers
+	size_t pos = buffer.find("\r\n\r\n");
+
+	if (pos == std::string::npos)
+		return std::string::npos;
+
+	return pos + 4;
 }
 
 /**
@@ -79,12 +85,30 @@ bool HTTPRequestParser::isRequestComplete(const std::string &buffer)
  */
 size_t HTTPRequestParser::getRequestEnd(const std::string &buffer) //Habrá que mejorar esto para cuando haya body, pero de momento para probar bien.
 {
-	size_t pos = buffer.find("\r\n\r\n");
+	size_t pos = getHeadersEnd(buffer);
 
 	if (pos == std::string::npos)
 		return std::string::npos;
 
-	return pos + 4;
+	size_t bodyStart = pos + 4;
+
+	std::string headerPart = buffer.substr(0, pos);
+	std::istringstream headerPartStream(headerPart);
+	std::string requestLine, headerLine, key, value;
+
+	if (!std::getline(headerPartStream, requestLine))
+		throw HTTPException(BAD_REQUEST);
+
+	while (std::getline(headerPartStream, headerLine))
+	{
+		// getline() elimina '\n', pero deja '\r'
+		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
+			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
+
+		parseHeaderLine(headerLine, key, value); //CONTINUAR IMP LANZA THROW HTTPException(BAD_REQUEST) si el header no es valido. HAY QUE RECOGERLAS!!!!!!!
+		//COMPROBAR SI KEY TIENE EL VALOR QUE BUSCAMOS (content-length) y lugo la otra.
+	}
+
 }
 
 /**
@@ -156,6 +180,32 @@ void HTTPRequestParser::parseVersion(HTTPRequest &request, const std::string &ve
 }
 
 /**
+ * Parses a single header line.
+ *
+ * headerLine: The header line to parse.
+ * key: The key of the header.
+ * value: The value of the header.
+ */
+void HTTPRequestParser::parseHeaderLine(std::string &headerLine, std::string &key, std::string &value)
+{
+	size_t colonPos = headerLine.find(':');
+		if (colonPos == std::string::npos)
+			throw HTTPException(BAD_REQUEST);
+
+		key = headerLine.substr(0, colonPos);
+		if (key.empty()) //IMP: quizás validar que las nombres de los header sean validos o al menos que no tengan espacios dentro? No lo se.
+			throw HTTPException(BAD_REQUEST);
+		value = headerLine.substr(colonPos + 1);
+
+		// Quitamos espacios y tabs del principio del valor
+		size_t start = value.find_first_not_of(" \t");
+		if (start != std::string::npos) // Si hay al menos un caracter que no sea espacio o tab, eliminamos los espacios y tabs del principio.
+			value.erase(0, start);
+		else
+			value.clear(); // Si el valor es solo espacios, lo dejamos vacío.
+}
+
+/**
  * Parses the headers of the HTTP request.
  * 
  * request: The HTTPRequest object to populate.
@@ -164,7 +214,7 @@ void HTTPRequestParser::parseVersion(HTTPRequest &request, const std::string &ve
 void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &rawRequest) //IMP Mejorar el parseo aqui también. de momento para probar bien.
 {
 	std::istringstream rawStream(rawRequest);
-	std::string requestLine, headerLine;
+	std::string requestLine, headerLine, key, value;
 
 	if (!std::getline(rawStream, requestLine))
 		throw HTTPException(BAD_REQUEST);
@@ -174,21 +224,8 @@ void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &ra
 		// getline() elimina '\n', pero deja '\r'
 		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
 			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
-		
-		size_t colonPos = headerLine.find(':');
-		if (colonPos == std::string::npos)
-			throw HTTPException(BAD_REQUEST);
 
-		std::string key = headerLine.substr(0, colonPos);
-		if (key.empty()) //IMP: quizás validar que las nombres de los header sean validos o al menos que no tengan espacios dentro? No lo se.
-			throw HTTPException(BAD_REQUEST);
-		std::string value = headerLine.substr(colonPos + 1);
-
-		// Quitamos espacios y tabs del principio del valor
-		size_t start = value.find_first_not_of(" \t");
-		if (start != std::string::npos)
-			value.erase(0, start);
-
-		request.setHeader(key, value);
+		parseHeaderLine(headerLine, key, value);
+		request.setHeader(StringUtils::toLowerString(key), value);
 	}
 }
