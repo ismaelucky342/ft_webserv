@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/23 13:19:21 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/14 15:43:49 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include "StringUtils.hpp"
 
 /**
  * Default constructor for the ConfigParser class. Initializes default value for
@@ -217,7 +218,7 @@ void ConfigParser::parseListen(Config &config)
 		if (listenStr.empty())
 			throw std::runtime_error("Missing port");
 	}
-	long port = strToLong(listenStr);
+	long port = StringUtils::parseLong(listenStr);
 	if (port < 1 || port > 65535) // Comprobamos que el puerto esté en el rango válido (1-65535).
 		throw std::runtime_error("Invalid port number: " + current());
 	Listen listen(static_cast<int>(port), interface);
@@ -277,7 +278,7 @@ void ConfigParser::parseErrorPage(Config &config)
 	expect(
 		"error_page"); // Si el token actual es "error_page", avanzamos al siguiente token que debería ser el código de error.
 	std::string errorCodeStr = current(); // Obtenemos el valor del token actual.
-	long errorCode = strToLong(errorCodeStr);
+	long errorCode = StringUtils::parseLong(errorCodeStr);
 	if (errorCode < 100 ||
 		errorCode > 599) // Comprobamos que el código de error esté en el rango válido (100-599).
 		throw std::runtime_error("Invalid error code: " + errorCodeStr);
@@ -452,21 +453,4 @@ void ConfigParser::parseCgi(Location &location)
 	expect(";");
 }
 
-/**
- * Converts a string to a long.
- *
- * str: The string to convert.
- * Returns: The corresponding long.
- */
-long ConfigParser::strToLong(const std::string &str)
-{
-	char *end;
-	long value = std::strtol(
-		str.c_str(), &end,
-		10); // Convertimos el token actual a un número entero (long) usando strtol. end apunta al primer caracter que no se pudo convertir. (el 10 es la base a lo que lo queremos convertir)
-	if (*end !=
-		'\0') // Si end no apunta al final de la cadena, significa que hubo caracteres no numéricos en el token actual, por lo que lanzamos un error.
-		throw std::runtime_error("Invalid number: " + str);
-	return value;
-}
 

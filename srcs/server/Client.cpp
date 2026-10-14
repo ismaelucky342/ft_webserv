@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 14:06:00 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/14 10:53:00 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -148,6 +148,26 @@ bool Client::isKeepAlive() const
 }
 
 /**
+ * Get the HTTPRequest object for the client.
+ * 
+ * @return A reference to the HTTPRequest object.
+ */
+HTTPRequest &Client::getRequest()
+{
+	return _request;
+}
+
+/**
+ * Get the HTTPRequest object for the client (const version).
+ * 
+ * @return A const reference to the HTTPRequest object.
+ */
+const HTTPRequest &Client::getRequest() const
+{
+	return _request;
+}
+
+/**
  * Set whether the client connection should be kept alive.
  * 
  * @param keepAlive True to keep the connection alive, false otherwise.
@@ -192,10 +212,19 @@ void Client::clearSendBuffer()
 }
 
 /**
+ * Clear the HTTPRequest object for the client.
+ */
+void Client::clearRequest()
+{
+	_request = HTTPRequest();
+}
+
+/**
  * Reset the client state, Only the attributes referring to the current request/response.
  */
 void Client::reset()
 {
 	clearSendBuffer();
 	resetBytesSent();
+	clearRequest();
 }

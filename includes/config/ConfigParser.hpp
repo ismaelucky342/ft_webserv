@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 14:38:09 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/23 12:20:01 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/14 15:44:06 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -47,8 +47,6 @@ private:
 	void parseRedirect(Location &location);
 	void parseUploadStore(Location &location);
 	void parseCgi(Location &location);
-
-	long strToLong(const std::string &str); //IMP: Estas y la funcion de abajo tendremos que mantenerlas
 };
 
 #endif

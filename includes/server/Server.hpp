@@ -30,7 +30,7 @@ private:
 	void writeToClient(int clientSocket);
 	Client &getClient(int clientSocket);
 	void disconnectClient(int clientSocket);
-	void updateClientKeepAlive(Client &client, const HTTPRequest &request);
+	void updateClientKeepAlive(Client &client);
 	//Request handling
 	bool processNextRequest(int clientSocket);
 	const Config *isValidConfig(const Config *config, int clientSocket);

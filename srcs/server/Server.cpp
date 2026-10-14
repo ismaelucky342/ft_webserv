@@ -11,6 +11,7 @@
 #include "http/HTTPException.hpp"
 #include "server/error.hpp"
 #include "colors.hpp"
+#include "StringUtils.hpp"
 
 /**
  * Constructor for the Server class.
@@ -359,10 +360,10 @@ void Server::disconnectClient(int clientSocket)
  * @param client The client object.
  * @param request The HTTP request object.
  */
-void Server::updateClientKeepAlive(Client &client, const HTTPRequest &request)
+void Server::updateClientKeepAlive(Client &client)
 {
-	std::string connection = request.getHeader("Connection");
-	std::string version = request.getVersion();
+	std::string connection = client.getRequest().getHeader("Connection");
+	std::string version = client.getRequest().getVersion();
 
 	if (version == "HTTP/1.1")
 		client.setKeepAlive(connection != "close"); // En HTTP/1.1, la conexión es persistente por defecto, a menos que se indique "Connection: close".
@@ -384,29 +385,46 @@ bool Server::processNextRequest(int clientSocket)
 	HTTPRequestParser parser;
 	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 
-	size_t requestEnd = parser.getHeadersEnd(client.getRecvBuffer());
-	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+	size_t headersEnd = parser.getHeadersEnd(client.getRecvBuffer());
+	if (headersEnd == std::string::npos) //Si no hemos encontrado el final de una peticion, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 	{
 		std::cout << "Request not complete yet." << std::endl;
 		return false;
 	}
-
-	std::string rawRequest = client.getRecvBuffer().substr(0, requestEnd); //Obtenemos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
-	client.getRecvBuffer().erase(0, requestEnd); //Eliminamos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
-	std::cout << "Request complete." << std::endl;
-	std::cout << "Imprimiendo request a procesar: " << std::endl << rawRequest << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
-	std::cout << "Imprimiendo resto de recvBuffer: " << std::endl << client.getRecvBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla el resto del buffer de recepcion del cliente y poder entenderlo. IMP: luego podemos quitarla.
 	try
 	{
-		HTTPRequest request = parser.parse(rawRequest); //Parseamos la peticion y obtenemos un objeto HTTPRequest con los datos parseados. Esto implica leer la request line, los headers y el body de la peticion.
-		request.print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
-		updateClientKeepAlive(client, request); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
-
-		config = getConfigFromHost(request.getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
+		std::string rawHeaders = client.getRecvBuffer().substr(0, headersEnd); //Obtenemos la subcadena de los headers de a peticion, ya que hemos comprobado que hemos recibido todos los headers.
+		parser.parseRequestLine(client.getRequest(), rawHeaders); //Parseamos la request line de la peticion y la guardamos en el objeto HTTPRequest del cliente. (el método, la ruta y la versión del protocolo).
+		parser.parseHeaders(client.getRequest(), rawHeaders); //Parseamos los headers de la peticion y los guardamos en el objeto HTTPRequest del cliente. (los headers son un map de key-value).
+		config = getConfigFromHost(client.getRequest().getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 		if (config == NULL)
 			throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
-		
-		HTTPResponse response = handleRequest(request, config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
+		size_t contentLength = 0;
+		if (client.getRequest().hasHeader("Content-Length"))
+		{
+    		std::string value = client.getRequest().getHeader("Content-Length"); 
+			if (!StringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength. Si no se puede parsear, lanzamos una excepción indicando que la petición es incorrecta.
+        		throw HTTPException(BAD_REQUEST); // Si no se puede parsear el Content-Length, devolvemos un error 400 Bad Request.
+		}
+		if (contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el ClientMaxBodySize del config, lanzamos una excepción indicando que el contenido es demasiado grande.
+    		throw HTTPException(CONTENT_TOO_LARGE);
+		size_t requestEnd = parser.getRequestEnd(client.getRecvBuffer(), headersEnd, contentLength); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
+		if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+		{
+			std::cout << "Request not complete yet." << std::endl;
+			return false;
+		}
+		std::string rawBody = client.getRecvBuffer().substr(headersEnd, requestEnd - headersEnd); //Obtenemos la subcadena del body de la peticion, ya que hemos comprobado que hemos recibido todo el body. Y lo guardamos/parseamos en el objeto HTTPRequest del cliente.
+		parser.parseBody(client.getRequest(), rawBody); //Parseamos el body de la peticion y lo guardamos en el objeto HTTPRequest del cliente. (el body es un string).
+		std::string rawRequest = client.getRecvBuffer().substr(0, requestEnd); // IMP DEBUGGER Obtenemos la subcadena de la petición completa (headers + body) para poder mostrarla por pantalla y entenderla mejor. Luego se uede borrar.
+		client.getRecvBuffer().erase(0, requestEnd); //Eliminamos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
+		std::cout << "Request complete." << std::endl;
+		std::cout << "Imprimiendo request a procesar: " << std::endl << rawRequest << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
+		std::cout << "Imprimiendo resto de recvBuffer: " << std::endl << client.getRecvBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla el resto del buffer de recepcion del cliente y poder entenderlo. IMP: luego podemos quitarla.
+		client.getRequest().print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
+		updateClientKeepAlive(client); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
+
+		HTTPResponse response = handleRequest(client.getRequest(), config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
 		client.getSendBuffer() = response.serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
 		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
 		return true;

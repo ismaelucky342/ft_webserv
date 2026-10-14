@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:14:40 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/22 13:59:51 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/14 10:51:03 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,7 +15,6 @@
 
 #include <string>
 #include "http/HTTPRequest.hpp"
-#include "http/HTTPResponse.hpp"
 #include "server/ServerSocket.hpp"
 
 class Client
@@ -29,6 +28,8 @@ private:
 	//Para una petición concreta.
 	std::string _sendBuffer;
 	size_t _bytesSent;
+	HTTPRequest _request; 
+
 
 public:
 	Client(int clientFd, ServerSocket &serverSocket);
@@ -48,10 +49,10 @@ public:
 
 	size_t getBytesSent() const;
 
-	HTTPResponse &getResponse();
-	const HTTPResponse &getResponse() const;
-
 	bool isKeepAlive() const;
+
+	HTTPRequest &getRequest();
+	const HTTPRequest &getRequest() const;
 
 	// Setters / acciones
 	void setKeepAlive(bool keepAlive);
@@ -61,6 +62,7 @@ public:
 
 	void clearRecvBuffer();
 	void clearSendBuffer();
+	void clearRequest();
 
 	void reset();
 };

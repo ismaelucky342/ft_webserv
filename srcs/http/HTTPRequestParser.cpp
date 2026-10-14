@@ -5,6 +5,7 @@
 #include "http/HTTPException.hpp"
 #include "http/HTTPStatus.hpp"
 #include "StringUtils.hpp"
+#include "limits"
 
 /**
  * Default constructor for the HTTPRequestParser class.
@@ -57,7 +58,7 @@ HTTPRequest HTTPRequestParser::parse(const std::string &rawRequest)
 	HTTPRequest request;
 	parseRequestLine(request, rawRequest);
 	parseHeaders(request, rawRequest);
-	//IMP: Implement parseBody methods to handle headers and body parsing.
+	//IMP: Implement parseBody methods to handle headers and body parsing. No hace falta porque se asigna directamente.
 	return request;
 }
 
@@ -77,39 +78,60 @@ size_t HTTPRequestParser::getHeadersEnd(const std::string &buffer)
 	return pos + 4;
 }
 
-/**
- * Gets the position of the end of a HTTP request.
- * 
- * buffer: The buffer containing the raw HTTP request string.
- * @return The position of the end of the first found request.
- */
-size_t HTTPRequestParser::getRequestEnd(const std::string &buffer) //Habrá que mejorar esto para cuando haya body, pero de momento para probar bien.
+size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength)
 {
-	size_t pos = getHeadersEnd(buffer);
+	size_t maxValue = std::numeric_limits<size_t>::max();
 
-	if (pos == std::string::npos)
-		return std::string::npos;
+    if (bodyStart > maxValue - bodyLength) // truco: Lo compruebo representandolo con la resta (despejando la ecuación) para evitar el overflow en la suma
+        throw HTTPException(BAD_REQUEST);
 
-	size_t bodyStart = pos + 4;
+    size_t requestEnd = bodyStart + bodyLength;
 
-	std::string headerPart = buffer.substr(0, pos);
-	std::istringstream headerPartStream(headerPart);
-	std::string requestLine, headerLine, key, value;
+    if (buffer.size() < requestEnd)
+        return std::string::npos;
 
-	if (!std::getline(headerPartStream, requestLine))
-		throw HTTPException(BAD_REQUEST);
-
-	while (std::getline(headerPartStream, headerLine))
-	{
-		// getline() elimina '\n', pero deja '\r'
-		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
-			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
-
-		parseHeaderLine(headerLine, key, value); //CONTINUAR IMP LANZA THROW HTTPException(BAD_REQUEST) si el header no es valido. HAY QUE RECOGERLAS!!!!!!!
-		//COMPROBAR SI KEY TIENE EL VALOR QUE BUSCAMOS (content-length) y lugo la otra.
-	}
-
+    return requestEnd;
 }
+
+
+// /**
+//  * Gets the position of the end of a HTTP request.
+//  * 
+//  * buffer: The buffer containing the raw HTTP request string.
+//  * @return The position of the end of the first found request.
+//  */
+// size_t HTTPRequestParser::getRequestEnd(const std::string &buffer) //Habrá que mejorar esto para cuando haya body, pero de momento para probar bien.
+// {
+// 	size_t bodyStart = getHeadersEnd(buffer);
+
+// 	if (bodyStart == std::string::npos)
+// 		return std::string::npos;
+
+// 	std::string headerPart = buffer.substr(0, bodyStart);
+// 	std::istringstream headerPartStream(headerPart);
+// 	std::string requestLine, headerLine, key, value;
+
+// 	if (!std::getline(headerPartStream, requestLine))
+// 		throw HTTPException(BAD_REQUEST);
+
+// 	while (std::getline(headerPartStream, headerLine))
+// 	{
+// 		// getline() elimina '\n', pero deja '\r'
+// 		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
+// 			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
+
+// 		parseHeaderLine(headerLine, key, value); //CONTINUAR IMP LANZA THROW HTTPException(BAD_REQUEST) si el header no es valido. HAY QUE RECOGERLAS!!!!!!!
+// 		//COMPROBAR SI KEY TIENE EL VALOR QUE BUSCAMOS (content-length) y lugo la otra.
+// 		if (StringUtils::toLowerString(key) == "content-length")
+// 		{
+// 			size_t bodyLength = std::stoul(value);
+// 			if (bodyStart + bodyLength > buffer.size())
+// 				return std::string::npos; // Si el cuerpo no está completo, devolvemos npos.
+// 			return bodyStart + bodyLength;
+// 		}
+// 	}
+// 	return std::string::npos;
+// }
 
 /**
  * Parses the request line of the HTTP request.
@@ -119,6 +141,9 @@ size_t HTTPRequestParser::getRequestEnd(const std::string &buffer) //Habrá que 
  */
 void HTTPRequestParser::parseRequestLine(HTTPRequest &request, const std::string &rawRequest)
 {
+	if (request.isRequestLineParsed())
+		return ; // Si la request line ya ha sido parseada, no hacemos nada.
+
 	std::istringstream rawStream(rawRequest);
 	std::string requestLine;
 
@@ -137,6 +162,7 @@ void HTTPRequestParser::parseRequestLine(HTTPRequest &request, const std::string
 	parseMethod(request, method);
 	parsePath(request, path);
 	parseVersion(request, version);
+	request.setRequestLineParsed(true); // Marcamos que la request line ha sido parseada correctamente.
 }
 
 /**
@@ -213,6 +239,9 @@ void HTTPRequestParser::parseHeaderLine(std::string &headerLine, std::string &ke
  */
 void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &rawRequest) //IMP Mejorar el parseo aqui también. de momento para probar bien.
 {
+	if (request.areHeadersParsed())
+		return ; // Si los headers ya han sido parseados, no hacemos nada.
+
 	std::istringstream rawStream(rawRequest);
 	std::string requestLine, headerLine, key, value;
 
@@ -228,4 +257,14 @@ void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &ra
 		parseHeaderLine(headerLine, key, value);
 		request.setHeader(StringUtils::toLowerString(key), value);
 	}
+	request.setHeadersParsed(true); // Marcamos que los headers han sido parseados correctamente.
+}
+
+void HTTPRequestParser::parseBody(HTTPRequest& request, const std::string& rawBody)
+{
+	if (request.isBodyParsed())
+		return ; // Si el body ya ha sido parseado, no hacemos nada.
+
+	request.setBody(rawBody);
+	request.setBodyParsed(true); // Marcamos que el body ha sido parseado correctamente.
 }
