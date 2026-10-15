@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 14:38:09 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/14 15:44:06 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/15 17:19:24 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,6 +40,8 @@ private:
 	const std::string parseRoot();
 	const std::string parseIndex();
 	void parseErrorPage(Config &config);
+	bool validateMaxBodySize(const std::string &str, size_t &result);
+	void parseClientMaxBodySize(Config &config);
 	void parseOther(); // BORRAR Auxiliar para imprimir los bloques que aun no parseo. Luego se eliminará
 	void parseLocation(Config &config); //Los de location para pruebas mientras unificamos.
 	void parseAutoindex(Location &location);

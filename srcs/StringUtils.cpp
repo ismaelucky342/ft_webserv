@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/09 14:46:23 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/14 15:40:20 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/15 16:54:22 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -51,26 +51,26 @@ std::string StringUtils::toLowerString(const std::string &str)
 bool StringUtils::parseSizeT(const std::string &str, size_t &result)
 {
 	if (str.empty())
-        return false;
+		return false;
 
-    size_t value = 0;
-    size_t maxValue = std::numeric_limits<size_t>::max();
+	size_t value = 0;
+	size_t maxValue = std::numeric_limits<size_t>::max();
 
-    for (size_t i = 0; i < str.size(); ++i)
-    {
-        if (!std::isdigit(static_cast<unsigned char>(str[i])))
-            return false;
+	for (size_t i = 0; i < str.size(); ++i)
+	{
+		if (!std::isdigit(static_cast<unsigned char>(str[i])))
+			return false;
 
-        size_t digit = str[i] - '0';
+		size_t digit = str[i] - '0';
 
-        if (value > (maxValue - digit) / 10) // value × 10 + digit <= maxValue ---> despejando value:  value > (maxValue - digit) / 10
-            return false;
+		if (value > (maxValue - digit) / 10) // value × 10 + digit <= maxValue ---> despejando value:  value > (maxValue - digit) / 10
+			return false;
 
-        value = value * 10 + digit;
-    }
+		value = value * 10 + digit;
+	}
 
-    result = value;
-    return true;
+	result = value;
+	return true;
 }
 
 /**

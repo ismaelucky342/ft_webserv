@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/14 15:43:49 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/15 18:03:55 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <limits>
 #include "StringUtils.hpp"
 
 /**
@@ -171,8 +172,7 @@ Config ConfigParser::parseServer()
 	expect("{"); //Lo mismo qon la llave de apertura del bloque de configuracion del server. De esta manera vamos comprobando que este bien formado el archivo de configuracion.
 	while (current() != "}") // Mientras no encontremos la llave de cierre del bloque de configuracion del server, seguimos parseando los tokens.
 	{
-		if (current() ==
-			"listen") // Si el token es listen parseamos el puerto y la interfaz si se indica y lo guardamos en el objeto config.
+		if (current() == "listen") // Si el token es listen parseamos el puerto y la interfaz si se indica y lo guardamos en el objeto config.
 			parseListen(config);
 		else if (current() == "server_name")
 			parseServerName(config);
@@ -182,6 +182,8 @@ Config ConfigParser::parseServer()
 			config.setIndex(parseIndex());
 		else if (current() == "error_page")
 			parseErrorPage(config);
+		else if (current() == "client_max_body_size")
+			parseClientMaxBodySize(config);
 		else if (current() == "location")
 			parseLocation(config);
 		else
@@ -293,19 +295,84 @@ void ConfigParser::parseErrorPage(Config &config)
 }
 
 /**
+ * Validates and converts a string representing a maximum body size to a size_t.
+ * 
+ * str: The string to validate and convert.
+ * result: The resulting size_t value.
+ * 
+ * Returns true if the conversion is successful, false otherwise.
+ */	
+bool ConfigParser::validateMaxBodySize(const std::string &str, size_t &result)
+{
+	if (str.empty())
+		return false;
+
+	size_t value = 0;
+	size_t multiplier = 1;
+	size_t maxValue = std::numeric_limits<size_t>::max();
+	size_t i = 0;
+
+	// LEo la parte de los numeros hasta que encuentre un caracter que no sea un digito o llegue al final de la cadena.
+	while (i < str.size() && std::isdigit(static_cast<unsigned char>(str[i])))
+	{
+		size_t digit = str[i] - '0';
+		if (value > (maxValue - digit) / 10) // value × 10 + digit <= maxValue ---> despejando value:  value > (maxValue - digit) / 10. Para comprobar que no se desborde el valor de size_t al multiplicar por 10 y sumar el digito.
+			return false;
+		value = value * 10 + digit;
+		++i;
+	}
+	// Al menos un dígito debe estar presente para que sea un número válido.
+	if (i == 0)
+		return false;
+	// Lee la parte de la unidad (k, m, g) si está presente y establece el multiplicador correspondiente.
+	if (i < str.size())
+	{
+		if (i != str.size() - 1) // SI hay más de un caracter después de los dígitos, es inválido (solo se permite un caracter de unidad).
+			return false;
+		if (str[i] == 'k' || str[i] == 'K')
+			multiplier = 1024L;
+		else if (str[i] == 'm' || str[i] == 'M')
+			multiplier = 1024L * 1024L;
+		else if (str[i] == 'g' || str[i] == 'G')
+			multiplier = 1024L * 1024L * 1024L;
+		else
+			return false;
+	}
+	// Chequeo el desbordamiento al multiplicar por el multiplicador.
+	if (value > maxValue / multiplier)
+		return false;
+	result = value * multiplier;
+	return true;
+}
+
+
+void ConfigParser::parseClientMaxBodySize(Config &config)
+{
+	expect("client_max_body_size"); // Si el token actual es "client_max_body_size", avanzamos al siguiente token que debería ser el tamaño máximo del cuerpo de la solicitud.
+	std::string sizeStr = current(); // Obtenemos el valor del token actual.
+	size_t maxBodySize;
+	if (!validateMaxBodySize(sizeStr, maxBodySize)) // Validamos y convertimos el tamaño máximo del cuerpo de la solicitud a size_t.
+		throw std::runtime_error("Invalid client_max_body_size value: " + sizeStr);
+	config.setClientMaxBodySize(maxBodySize); // Establecemos el tamaño máximo del cuerpo de la solicitud en el objeto config.
+	next(); // Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(";");
+}
+
+/**
  * Parses any other directive that is not explicitly handled. it just take every toket until it finds the end of the block (}) and prints it to the console.
  * ¡Esta función es solo para probar mientras no parseo las otras directivas. quitarla luego de la clase!
  * config: The Config object to initialize.
  */
 void ConfigParser::parseOther()
 {
-	std::cout << BOLD_YELLOW << "Parsing other directive: " << current() << RESET << std::endl;
-	while (current() != "}")
+	std::cout << BOLD_CYAN << "Parsing other directive: " << current() << RESET << std::endl;
+	while (current() != "}" && current() != ";") // Mientras no encontremos la llave de cierre del bloque de configuración del server o un punto y coma, seguimos parseando los tokens.
 	{
-		std::cout << BOLD_YELLOW << "Token: " << current() << RESET << std::endl;
+		std::cout << BOLD_CYAN << "Token: " << current() << RESET << std::endl;
 		next();
 	}
-	expect("}"); // Comprobamos que el siguiente token sea una llave de cierre, que indica el final del bloque. SI no lo es lanzamos un error porque no estaria bien formado.
+	next(); // Avanzamos al siguiente token, que debería ser la llave de cierre del bloque de configuración del server o un punto y coma.
+	// expect("}"); // Comprobamos que el siguiente token sea una llave de cierre, que indica el final del bloque. SI no lo es lanzamos un error porque no estaria bien formado.
 }
 
 /**

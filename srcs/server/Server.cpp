@@ -402,12 +402,12 @@ bool Server::processNextRequest(int clientSocket)
 		size_t contentLength = 0;
 		if (client.getRequest().hasHeader("Content-Length"))
 		{
-    		std::string value = client.getRequest().getHeader("Content-Length"); 
+			std::string value = client.getRequest().getHeader("Content-Length"); 
 			if (!StringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength. Si no se puede parsear, lanzamos una excepción indicando que la petición es incorrecta.
-        		throw HTTPException(BAD_REQUEST); // Si no se puede parsear el Content-Length, devolvemos un error 400 Bad Request.
+				throw HTTPException(BAD_REQUEST); // Si no se puede parsear el Content-Length, devolvemos un error 400 Bad Request.
 		}
-		if (contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el ClientMaxBodySize del config, lanzamos una excepción indicando que el contenido es demasiado grande.
-    		throw HTTPException(CONTENT_TOO_LARGE);
+		if (config->getClientMaxBodySize() != 0 && contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
+			throw HTTPException(CONTENT_TOO_LARGE);
 		size_t requestEnd = parser.getRequestEnd(client.getRecvBuffer(), headersEnd, contentLength); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
 		if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 		{
@@ -434,6 +434,7 @@ bool Server::processNextRequest(int clientSocket)
 		HTTPResponse response = createErrorResponse(static_cast<HTTPStatus>(e.getStatusCode()), config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
 		client.getSendBuffer() = response.serialize();
 		setPollEvent(clientSocket, POLLOUT);
+		client.setKeepAlive(false); // Si ocurre un error, cerramos la conexión con el cliente después de enviar la respuesta de error.
 		return true;
 	}
 }
@@ -673,7 +674,7 @@ HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const Config *co
 {
 	std::ostringstream errorPagePathStream;
 
-	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error estática con el código de error y el mensaje correspondiente.
+	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error por defecto con el código de error y el mensaje correspondiente.
 		errorPagePathStream << DEFAULT_ERROR_PAGES_PATH << statusCode << ".html";
 	else
 		errorPagePathStream << config->getRoot() << config->getErrorPage(statusCode);

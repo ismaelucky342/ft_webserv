@@ -17,8 +17,7 @@ public:
 	void parseHeaders(HTTPRequest& request, const std::string& rawRequest);
 	void parseBody(HTTPRequest& request, const std::string& rawBody);
 	size_t getHeadersEnd(const std::string &buffer);
-	// size_t getRequestEnd(const std::string &buffer);
-	size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength);
+	size_t getRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength);
 
 private:
 	void parseMethod(HTTPRequest &request, const std::string &method);
