@@ -247,7 +247,7 @@ void Server::acceptClient(ServerSocket &serverSocket)
 	clientPoll.revents = 0;
 
 	_pollFds.push_back(clientPoll); // lo añadimos en el vector de elementos a escuchar.
-	_clients.insert(std::make_pair(clientSocket, Client(clientSocket, serverSocket)));
+	_clients.insert(std::make_pair(clientSocket, Client(clientSocket, serverSocket))); //AQUI es donde se llama repetidamente a los constructores de copia y operadores de asignación de la clase Client. Cada vez que se acepta un nuevo cliente, se crea un objeto Client temporal con el constructor que toma el descriptor de socket del cliente y una referencia al ServerSocket. Luego, este objeto temporal se inserta en el mapa _clients usando std::make_pair, lo que provoca la copia del objeto Client temporal en el mapa. Esto es lo que causa las llamadas repetidas a los constructores de copia y operadores de asignación de Client.
 }
 
 /**
@@ -433,8 +433,8 @@ bool Server::processNextRequest(int clientSocket)
 	{
 		HTTPResponse response = createErrorResponse(static_cast<HTTPStatus>(e.getStatusCode()), config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
 		client.getSendBuffer() = response.serialize();
-		setPollEvent(clientSocket, POLLOUT);
 		client.setKeepAlive(false); // Si ocurre un error, cerramos la conexión con el cliente después de enviar la respuesta de error.
+		setPollEvent(clientSocket, POLLOUT);
 		return true;
 	}
 }
@@ -502,8 +502,8 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	std::string srcPath;
 	struct stat fileInfo;
 	const Location *location = config->findLocation(request.getPath());
-	std::string root = config->getRoot();
-	std::string index = config->getIndex();
+	std::string root = config->getRoot(); // Por defecto, el root es el del config, pero si la location tiene un root, lo sobreescribimos.
+	std::string index = config->getIndex(); // Por defecto, el index es el del config, pero si la location tiene un index, lo sobreescribimos.
 	
 	if (location == NULL)
 		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
@@ -511,15 +511,15 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	{
 		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		location->print();
-		if (location->hasRedirect())
+		if (location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
 			return createRedirectResponse(location->getRedirectCode(), location->getRedirectTarget());
-		if (location->hasRoot())
+		if (location->hasRoot()) // Si la location tiene un root, lo sobreescribimos.
 			root = location->getRoot();
-		if (location->hasIndex())
+		if (location->hasIndex()) // Si la location tiene un index, lo sobreescribimos.
 			index = location->getIndex();
 	}
 	if (!isMethodAllowed(request, location)) // Si no se permite el método, devolvemos un error 405 Method Not Allowed.
-		return createErrorResponse(METHOD_NOT_ALLOWED, config);
+		throw HTTPException(METHOD_NOT_ALLOWED);
 	srcPath = root + request.getPath();
 	std::cout << "ROOT: " << root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::cout << "PATH: " << request.getPath() << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
@@ -527,17 +527,17 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
 	{
 		if (errno == ENOENT) // Si el error es que no existe el fichero o directorio, devolvemos un error 404 Not Found.
-			return createErrorResponse(NOT_FOUND, config);
+			throw HTTPException(NOT_FOUND);
 		if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
-			return createErrorResponse(FORBIDDEN, config);
+			throw HTTPException(FORBIDDEN);
 		else // Si el error es otro, devolvemos un error 500 Internal Server Error.
-			return createErrorResponse(INTERNAL_SERVER_ERROR, config);
+			throw HTTPException(INTERNAL_SERVER_ERROR);
 	}
 	if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
 	{
 		std::ifstream file_stream(srcPath.c_str());
 		if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
-			return createErrorResponse(FORBIDDEN, config);
+			throw HTTPException(FORBIDDEN);
 		else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 		{
 			std::ostringstream bodystream;
@@ -560,18 +560,18 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 					if (location != NULL && location->getAutoindex()) // Si la location tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
 						return createAutoIndexResponse(request.getPath());
 					else
-						return createErrorResponse(FORBIDDEN, config); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
+						throw HTTPException(FORBIDDEN); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
 				}
 				if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
-					return createErrorResponse(FORBIDDEN, config);
+					throw HTTPException(FORBIDDEN);
 				else // Si el error es otro, devolvemos un error 500 Internal Server Error.
-					return createErrorResponse(INTERNAL_SERVER_ERROR, config);
+					throw HTTPException(INTERNAL_SERVER_ERROR);
 			}
 			if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
 			{
 				std::ifstream file_stream(srcPath.c_str());
 				if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
-					return createErrorResponse(FORBIDDEN, config);
+					throw HTTPException(FORBIDDEN);
 				else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 				{
 					std::ostringstream bodystream;
@@ -580,10 +580,10 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 					return createResponse(OK, getContentType(srcPath), body);
 				}
 			}
-			return createErrorResponse(FORBIDDEN, config);
+			throw HTTPException(FORBIDDEN);
 		}
 	}
-	return createErrorResponse(FORBIDDEN, config);
+	throw HTTPException(FORBIDDEN);
 }
 
 // HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
@@ -668,6 +668,7 @@ HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &co
  * Creates an error HTTP response with the specified status code.
  * 
  * @param statusCode The HTTP status code.
+ * @param config The configuration object.
  * @return The created HTTP response.
  */
 HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const Config *config)
@@ -680,16 +681,19 @@ HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const Config *co
 		errorPagePathStream << config->getRoot() << config->getErrorPage(statusCode);
 
 	std::ostringstream bodystream;
+	HTTPResponse response;
 
 	std::ifstream error_file_stream(errorPagePathStream.str().c_str());
 	if (!error_file_stream.is_open()) // si no puede abrir la página de error o no existe, devolvemos una página de error estática con el código de error y el mensaje correspondiente.
-		return createDefaultErrorPage(statusCode);
+		response = createDefaultErrorPage(statusCode);
 	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 	{
 		bodystream << error_file_stream.rdbuf();
 		std::string body = bodystream.str();
-		return createResponse(statusCode, getContentType(errorPagePathStream.str()), body);
+		response = createResponse(statusCode, getContentType(errorPagePathStream.str()), body);
 	}
+	response.setHeader("Connection", "close"); // En caso de error, cerramos la conexión con el cliente después de enviar la respuesta de error. Avisamos al cliente de que la conexión se cerrará después de enviar la respuesta de error.
+	return response;
 }
 
 /**

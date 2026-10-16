@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/14 10:53:00 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/16 15:16:30 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,7 +23,7 @@
 Client::Client(int clientFd, ServerSocket &serverSocket)
 	: _fd(clientFd), _serverSocket(serverSocket), _keepAlive(false), _bytesSent(0)
 {
-	std::cout << BOLD_GREEN << "Client constructor called" << RESET << std::endl;
+	std::cout << BOLD_GREEN << "Client constructor called " << this << RESET << std::endl;
 }
 
 /**
@@ -33,9 +33,9 @@ Client::Client(int clientFd, ServerSocket &serverSocket)
  */
 Client::Client(const Client &other)
 	: _fd(other._fd), _serverSocket(other._serverSocket), _recvBuffer(other._recvBuffer), _keepAlive(other._keepAlive),
-	  _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent)
+	  _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent), _request(other._request)
 {
-	std::cout << BOLD_GREEN << "Client copy constructor called" << RESET << std::endl;
+	std::cout << BOLD_GREEN << "Client copy constructor called " << this << " from " << &other << RESET << std::endl;
 }
 
 /**
@@ -54,8 +54,9 @@ Client &Client::operator=(const Client &other)
 		_sendBuffer = other._sendBuffer;
 		_bytesSent = other._bytesSent;
 		_keepAlive = other._keepAlive;
+		_request = other._request;
 	}
-	std::cout << BOLD_GREEN << "Client assignment operator called" << RESET << std::endl;
+	std::cout << BOLD_GREEN << "Client assignment operator called" << this << " from " << &other << RESET << std::endl;
 	return *this;
 }
 
@@ -64,7 +65,7 @@ Client &Client::operator=(const Client &other)
  */
 Client::~Client()
 {
-	std::cout << BOLD_RED << "Client destructor called" << RESET << std::endl;
+	std::cout << BOLD_RED << "Client destructor called "  << this << RESET << std::endl;
 }
 
 /**

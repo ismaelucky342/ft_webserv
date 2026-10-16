@@ -82,15 +82,15 @@ size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodySt
 {
 	size_t maxValue = std::numeric_limits<size_t>::max();
 
-    if (bodyStart > maxValue - bodyLength) // truco: Lo compruebo representandolo con la resta (despejando la ecuación) para evitar el overflow en la suma
-        throw HTTPException(BAD_REQUEST);
+	if (bodyStart > maxValue - bodyLength) // truco: Lo compruebo representandolo con la resta (despejando la ecuación) para evitar el overflow en la suma
+		throw HTTPException(BAD_REQUEST);
 
-    size_t requestEnd = bodyStart + bodyLength;
+	size_t requestEnd = bodyStart + bodyLength;
 
-    if (buffer.size() < requestEnd)
-        return std::string::npos;
+	if (buffer.size() < requestEnd)
+		return std::string::npos;
 
-    return requestEnd;
+	return requestEnd;
 }
 
 
