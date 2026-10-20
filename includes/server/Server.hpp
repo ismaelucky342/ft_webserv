@@ -33,6 +33,8 @@ private:
 	void updateClientKeepAlive(Client &client);
 	//Request handling
 	bool processNextRequest(int clientSocket);
+	bool processChunkedBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body);
+	bool processContentLengthBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body);
 	const Config *isValidConfig(const Config *config, int clientSocket);
 	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
 	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config);

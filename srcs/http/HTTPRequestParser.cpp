@@ -63,77 +63,6 @@ HTTPRequest HTTPRequestParser::parse(const std::string &rawRequest)
 }
 
 /**
- * Gets the position of the end of the headers in a HTTP request.
- * 
- * buffer: The buffer containing the raw HTTP request string.
- * @return The position of the end of the first found request.
- */
-size_t HTTPRequestParser::getHeadersEnd(const std::string &buffer)
-{
-	size_t pos = buffer.find("\r\n\r\n");
-
-	if (pos == std::string::npos)
-		return std::string::npos;
-
-	return pos + 4;
-}
-
-size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength)
-{
-	size_t maxValue = std::numeric_limits<size_t>::max();
-
-	if (bodyStart > maxValue - bodyLength) // truco: Lo compruebo representandolo con la resta (despejando la ecuación) para evitar el overflow en la suma
-		throw HTTPException(BAD_REQUEST);
-
-	size_t requestEnd = bodyStart + bodyLength;
-
-	if (buffer.size() < requestEnd)
-		return std::string::npos;
-
-	return requestEnd;
-}
-
-
-// /**
-//  * Gets the position of the end of a HTTP request.
-//  * 
-//  * buffer: The buffer containing the raw HTTP request string.
-//  * @return The position of the end of the first found request.
-//  */
-// size_t HTTPRequestParser::getRequestEnd(const std::string &buffer) //Habrá que mejorar esto para cuando haya body, pero de momento para probar bien.
-// {
-// 	size_t bodyStart = getHeadersEnd(buffer);
-
-// 	if (bodyStart == std::string::npos)
-// 		return std::string::npos;
-
-// 	std::string headerPart = buffer.substr(0, bodyStart);
-// 	std::istringstream headerPartStream(headerPart);
-// 	std::string requestLine, headerLine, key, value;
-
-// 	if (!std::getline(headerPartStream, requestLine))
-// 		throw HTTPException(BAD_REQUEST);
-
-// 	while (std::getline(headerPartStream, headerLine))
-// 	{
-// 		// getline() elimina '\n', pero deja '\r'
-// 		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
-// 			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
-
-// 		parseHeaderLine(headerLine, key, value); //CONTINUAR IMP LANZA THROW HTTPException(BAD_REQUEST) si el header no es valido. HAY QUE RECOGERLAS!!!!!!!
-// 		//COMPROBAR SI KEY TIENE EL VALOR QUE BUSCAMOS (content-length) y lugo la otra.
-// 		if (StringUtils::toLowerString(key) == "content-length")
-// 		{
-// 			size_t bodyLength = std::stoul(value);
-// 			if (bodyStart + bodyLength > buffer.size())
-// 				return std::string::npos; // Si el cuerpo no está completo, devolvemos npos.
-// 			return bodyStart + bodyLength;
-// 		}
-// 	}
-// 	return std::string::npos;
-// }
-
-/**
  * Parses the request line of the HTTP request.
  * 
  * request: The HTTPRequest object to populate.
@@ -163,6 +92,106 @@ void HTTPRequestParser::parseRequestLine(HTTPRequest &request, const std::string
 	parsePath(request, path);
 	parseVersion(request, version);
 	request.setRequestLineParsed(true); // Marcamos que la request line ha sido parseada correctamente.
+}
+
+/**
+ * Parses the headers of the HTTP request.
+ * 
+ * request: The HTTPRequest object to populate.
+ * rawRequest: The raw HTTP request string.
+ */
+void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &rawRequest) //IMP Mejorar el parseo aqui también. de momento para probar bien.
+{
+	if (request.areHeadersParsed())
+		return ; // Si los headers ya han sido parseados, no hacemos nada.
+
+	std::istringstream rawStream(rawRequest);
+	std::string requestLine, headerLine, key, value;
+
+	if (!std::getline(rawStream, requestLine))
+		throw HTTPException(BAD_REQUEST);
+
+	while (std::getline(rawStream, headerLine) && headerLine != "\r")
+	{
+		// getline() elimina '\n', pero deja '\r'
+		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
+			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
+
+		parseHeaderLine(headerLine, key, value);
+		request.setHeader(StringUtils::toLowerString(key), value);
+	}
+	request.setHeadersParsed(true); // Marcamos que los headers han sido parseados correctamente.
+}
+
+/**
+ * Parses the body of the HTTP request.
+ * 
+ * request: The HTTPRequest object to populate.
+ * body: The body string to parse.
+ */
+void HTTPRequestParser::parseBody(HTTPRequest& request, const std::string& body)
+{
+	if (request.isBodyParsed())
+		return ; // Si el body ya ha sido parseado, no hacemos nada.
+
+	request.setBody(body);
+	request.setBodyParsed(true); // Marcamos que el body ha sido parseado correctamente.
+}
+
+/**
+ * Gets the position of the end of the headers in a HTTP request.
+ * 
+ * buffer: The buffer containing the raw HTTP request string.
+ * @return The position of the end of the first found request.
+ */
+size_t HTTPRequestParser::getHeadersEnd(const std::string &buffer)
+{
+	size_t pos = buffer.find("\r\n\r\n");
+
+	if (pos == std::string::npos)
+		return std::string::npos;
+
+	return pos + 4;
+}
+
+/**
+ * Gets the position of the end of a HTTP request based on the body start and header content-length.
+ * 
+ * buffer: The buffer containing the raw HTTP request string.
+ * bodyStart: The position in the buffer where the body starts.
+ * bodyLength: The length of the body.
+ * @return The position of the end of the request, or std::string::npos if the request is incomplete.
+ */
+size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength)
+{
+	size_t maxValue = std::numeric_limits<size_t>::max();
+
+	if (bodyStart > maxValue - bodyLength) // truco: Lo compruebo representandolo con la resta (despejando la ecuación) para evitar el overflow en la suma
+		throw HTTPException(BAD_REQUEST);
+
+	size_t requestEnd = bodyStart + bodyLength;
+
+	if (buffer.size() < requestEnd)
+		return std::string::npos;
+
+	return requestEnd;
+}
+
+size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t bodyStart)
+{
+	// Implement the logic to find the end of a chunked request
+	(void)buffer;
+	(void)bodyStart;
+	// For now, return std::string::npos to indicate that the end of the request has not been found. You will need to implement the actual logic to find the end of a chunked request based on the chunked transfer encoding rules.
+	return std::string::npos;
+}
+
+std::string HTTPRequestParser::cleanChunkedBody(const std::string& rawBody)
+{
+	// Implement the logic to clean the chunked body and return the actual body content
+	(void)rawBody;
+	// For now, return an empty string. You will need to implement the actual logic to clean the chunked body based on the chunked transfer encoding rules.
+	return std::string();
 }
 
 /**
@@ -229,42 +258,4 @@ void HTTPRequestParser::parseHeaderLine(std::string &headerLine, std::string &ke
 			value.erase(0, start);
 		else
 			value.clear(); // Si el valor es solo espacios, lo dejamos vacío.
-}
-
-/**
- * Parses the headers of the HTTP request.
- * 
- * request: The HTTPRequest object to populate.
- * rawRequest: The raw HTTP request string.
- */
-void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &rawRequest) //IMP Mejorar el parseo aqui también. de momento para probar bien.
-{
-	if (request.areHeadersParsed())
-		return ; // Si los headers ya han sido parseados, no hacemos nada.
-
-	std::istringstream rawStream(rawRequest);
-	std::string requestLine, headerLine, key, value;
-
-	if (!std::getline(rawStream, requestLine))
-		throw HTTPException(BAD_REQUEST);
-
-	while (std::getline(rawStream, headerLine) && headerLine != "\r")
-	{
-		// getline() elimina '\n', pero deja '\r'
-		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
-			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
-
-		parseHeaderLine(headerLine, key, value);
-		request.setHeader(StringUtils::toLowerString(key), value);
-	}
-	request.setHeadersParsed(true); // Marcamos que los headers han sido parseados correctamente.
-}
-
-void HTTPRequestParser::parseBody(HTTPRequest& request, const std::string& rawBody)
-{
-	if (request.isBodyParsed())
-		return ; // Si el body ya ha sido parseado, no hacemos nada.
-
-	request.setBody(rawBody);
-	request.setBodyParsed(true); // Marcamos que el body ha sido parseado correctamente.
 }

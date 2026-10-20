@@ -18,6 +18,8 @@ public:
 	void parseBody(HTTPRequest& request, const std::string& rawBody);
 	size_t getHeadersEnd(const std::string &buffer);
 	size_t getRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength);
+	size_t getChunkedRequestEnd(const std::string &buffer, size_t bodyStart);
+	std::string cleanChunkedBody(const std::string& rawBody);
 
 private:
 	void parseMethod(HTTPRequest &request, const std::string &method);
