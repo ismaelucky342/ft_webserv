@@ -404,7 +404,7 @@ bool Server::processNextRequest(int clientSocket)
 		std::string  body;
 		if (client.getRequest().hasHeader("Transfer-Encoding"))  //La peticion viene dividida en chunks.
 		{
-			throw HTTPException(NOT_IMPLEMENTED); // IMP: POR EL MOMENTO HASTA QUE NO IMPLEMENTEMOS LAS FUNCIONES DEL CUHNKED, DEVOLVEMOS UN ERROR 501 NOT IMPLEMENTED. Esto es importante porque si el cliente envia una peticion con Transfer-Encoding: chunked, significa que la peticion viene dividida en chunks y tenemos que parsearla correctamente para poder procesarla. Si no lo hacemos, no podremos procesar la peticion correctamente y devolveremos un error 501 Not Implemented.
+			std::cout << YELLOW << "Request has Transfer-Encoding: chunked" << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 			if (!processChunkedBody(client, config, headersEnd, requestEnd, body)) //Procesamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion.
 				return false;
 		}
@@ -468,7 +468,8 @@ bool Server::processChunkedBody(Client &client, const Config *config, const size
 		return false;
 	}
 	rawBody = client.getRecvBuffer().substr(headersEnd, requestEnd - headersEnd); //Obtenemos la subcadena del body de la peticion, ya que hemos comprobado que hemos recibido todo el body. Y lo guardamos/parseamos en el objeto HTTPRequest del cliente.
-	body = parser.cleanChunkedBody(rawBody); //Parseamos el body de la peticion y lo guardamos en el objeto HTTPRequest del cliente. (el body es un string).
+	// body = parser.cleanChunkedBody(rawBody); //Parseamos el body de la peticion y lo guardamos en el objeto HTTPRequest del cliente. (el body es un string).
+	body = rawBody; // IMP: POR EL MOMENTO HASTA QUE NO IMPLEMENTEMOS LAS FUNCIONES DEL CUHNKED, DEVOLVEMOS EL BODY SIN PARSEAR. Esto es importante porque si el cliente envia una peticion con Transfer-Encoding: chunked, significa que la peticion viene dividida en chunks y tenemos que parsearla correctamente para poder procesarla. Si no lo hacemos, no podremos procesar la peticion correctamente y devolveremos un error 501 Not Implemented.
 	if (config->getClientMaxBodySize() != 0 && body.size() > config->getClientMaxBodySize()) //Si el body de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
 		throw HTTPException(CONTENT_TOO_LARGE);
 	return true;
@@ -610,12 +611,14 @@ const Config *Server::isValidConfig(const Config *config, int clientSocket)
 const Config *Server::getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket)// IMP Revisar hecho rapido AQUIIIIII
 {
 	const Config *config = NULL;
+	std::string interface;
 	if (!host.empty())
 	{	
 		size_t colonPos = host.find(':');
 		if (colonPos == std::string::npos)
-			throw HTTPException(BAD_REQUEST);
-		std::string interface = host.substr(0, colonPos);
+			interface = host;
+		else
+			interface = host.substr(0, colonPos);
 		config = serverSocket.getConfigFromKey(interface);
 	}
 	if (config == NULL)

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/09 14:46:23 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/15 16:54:22 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/21 18:25:24 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -46,29 +46,35 @@ std::string StringUtils::toLowerString(const std::string &str)
  * str: The string to parse.
  * result: Reference to store the parsed size_t value.
  * 
+ * base: The base to use for parsing (default is 10).
  * Returns true if parsing was successful, false otherwise.
  */
-bool StringUtils::parseSizeT(const std::string &str, size_t &result)
+bool StringUtils::parseSizeT(const std::string &str, size_t &result, const int &base)
 {
 	if (str.empty())
 		return false;
 
 	size_t value = 0;
+	size_t digit = 0;
 	size_t maxValue = std::numeric_limits<size_t>::max();
 
+	if (base != 10 && base != 16)
+		return false;
 	for (size_t i = 0; i < str.size(); ++i)
 	{
-		if (!std::isdigit(static_cast<unsigned char>(str[i])))
+		if (base == 10 && !std::isdigit(static_cast<unsigned char>(str[i])))
+			return false;
+		else if (base == 16 && !std::isxdigit(static_cast<unsigned char>(str[i])))
+			return false;
+		if (std::isdigit(static_cast<unsigned char>(str[i])))
+			digit = str[i] - '0';
+		else
+			digit = StringUtils::toLowerChar(static_cast<unsigned char>(str[i])) - 'a' + 10; // +10 porque 'a' representa 10 en hexadecimal
+		if (value > (maxValue - digit) / base) // value × base + digit <= maxValue ---> despejando value:  value > (maxValue - digit) / base
 			return false;
 
-		size_t digit = str[i] - '0';
-
-		if (value > (maxValue - digit) / 10) // value × 10 + digit <= maxValue ---> despejando value:  value > (maxValue - digit) / 10
-			return false;
-
-		value = value * 10 + digit;
+		value = value * base + digit;
 	}
-
 	result = value;
 	return true;
 }

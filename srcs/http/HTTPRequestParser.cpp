@@ -179,11 +179,34 @@ size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodySt
 
 size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t bodyStart)
 {
-	// Implement the logic to find the end of a chunked request
-	(void)buffer;
-	(void)bodyStart;
-	// For now, return std::string::npos to indicate that the end of the request has not been found. You will need to implement the actual logic to find the end of a chunked request based on the chunked transfer encoding rules.
-	return std::string::npos;
+	size_t pos = bodyStart;
+	while (true)
+	{
+		size_t lineEnd = buffer.find("\r\n", pos);
+		if (lineEnd == std::string::npos)
+			return std::string::npos;
+		std::string chunkSizeStr = buffer.substr(pos, lineEnd - pos);
+		size_t chunkSize = 0;
+		if (!StringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
+			throw HTTPException(BAD_REQUEST);
+		pos = lineEnd + 2;
+		if (chunkSize == 0) // Si el tamaño del chunk es 0, significa que hemos llegado al final del body chunked, por lo que devolvemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente.
+		{
+			if (2 > buffer.size() - pos) //Si los 2 bytes del final del chunk no están completos, devolvemos std::string::npos. Lo comprobamos restando para evitar el overflow del size_t en la suma.
+				return std::string::npos;
+			else if (buffer[pos] != '\r' || buffer[pos + 1] != '\n') //Si los 2 bytes del final del chunk no son \r\n, significa que la petición es incorrecta, por lo que lanzamos una excepción.
+				throw HTTPException(BAD_REQUEST);
+			else
+				return pos + 2; 
+		}
+		if (chunkSize > buffer.size() - pos) //Si el chunk data no está completo, devolvemos std::string::npos. Lo comprobamos restando para evitar el overflow del size_t en la suma.
+			return std::string::npos;
+		if (2 > buffer.size() - pos - chunkSize) //Si los 2 bytes del final del chunk no están completos, devolvemos std::string::npos. Lo comprobamos restando para evitar el overflow del size_t en la suma.
+			return std::string::npos;
+		if (buffer[pos + chunkSize] != '\r' || buffer[pos + chunkSize + 1] != '\n') //Si los 2 bytes del final del chunk no son \r\n, significa que la petición es incorrecta, por lo que lanzamos una excepción.
+			throw HTTPException(BAD_REQUEST);
+		pos += chunkSize + 2; //Avanzamos la posición al final del chunk data más los 2 bytes del \r\n del final del chunk.
+	}
 }
 
 std::string HTTPRequestParser::cleanChunkedBody(const std::string& rawBody)
