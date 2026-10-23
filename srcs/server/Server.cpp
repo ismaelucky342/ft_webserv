@@ -410,6 +410,7 @@ bool Server::processNextRequest(int clientSocket)
 		}
 		else if (client.getRequest().hasHeader("Content-Length"))
 		{
+			std::cout << YELLOW << "Request has Content-Length" << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 			if (!processContentLengthBody(client, config, headersEnd, requestEnd, body)) //Procesamos el body de la peticion con Content-Length. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion.
 				return false;
 		}
@@ -418,7 +419,7 @@ bool Server::processNextRequest(int clientSocket)
 			requestEnd = headersEnd;
 			body = "";
 		}
-		parser.parseBody(client.getRequest(), body); //Parseamos el body de la peticion y lo guardamos en el objeto HTTPRequest del cliente. (el body es un string).
+		parser.parseNormalizedBody(client.getRequest(), body); //Guardamos el body de la peticion ya normalizado en el objeto HTTPRequest del cliente.
 		std::string rawRequest = client.getRecvBuffer().substr(0, requestEnd); // IMP DEBUGGER Obtenemos la subcadena de la petición completa (headers + body) para poder mostrarla por pantalla y entenderla mejor. Luego se uede borrar.
 		client.getRecvBuffer().erase(0, requestEnd); //Eliminamos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
 		std::cout << "Request complete." << std::endl;
@@ -447,29 +448,22 @@ bool Server::processNextRequest(int clientSocket)
  * @param client The client for which to process the request body.
  * @param config The configuration to use for the request.
  * @param headersEnd The position in the receive buffer (recvBuffer) where the headers end.
- * @param requestEnd The position in the receive buffer (recvBuffer) where the entire request (headers + body) ends.
- * @param body The body of the request. Where the content processed will be stored and returned.
- * @return True if the body was processed successfully, false if the request is incomplete or invalid.
+ * @param requestEnd The position in the receive buffer (recvBuffer) where the entire request (headers + body) ends. It will be updated by this function.
+ * @param body The body of the request. It will be updated by this function.
+ * @return True if the body was processed successfully, false if the request is incomplete or invalid. It throws an HTTPException if the request is invalid.
+ * @throws HTTPException if the request is malformed.
  */
 bool Server::processChunkedBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body)
 {
 	HTTPRequestParser parser;
-	std::string rawBody;
 
 	if (client.getRequest().hasHeader("Content-Length")) //No se aceptan transfer-encoding y content-length a la vez, porque es una contradicción. Si el cliente envia ambos headers, devolvemos un error 400 Bad Request.
 		throw HTTPException(BAD_REQUEST);
 	std::string transferEncoding = StringUtils::toLowerString(client.getRequest().getHeader("Transfer-Encoding")); //Obtenemos el valor del header Transfer-Encoding y lo pasamos a minúsculas para poder compararlo con "chunked". Porque HTTP en la codificacion no diferencia entre mayusculas y minusculas en el tipo de la codificación de transferencia. Chunked sería tan válido como CHUNKED o Chunked.
 	if (transferEncoding != "chunked")
 		throw HTTPException(NOT_IMPLEMENTED);
-	requestEnd = parser.getChunkedRequestEnd(client.getRecvBuffer(), headersEnd); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Aqui buscamos el 
-	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
-	{
-		std::cout << "Request chunked not complete yet." << std::endl;
+	if (!parser.parseChunkedBody(client.getRecvBuffer(), headersEnd, requestEnd, body)) //Parseamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
 		return false;
-	}
-	rawBody = client.getRecvBuffer().substr(headersEnd, requestEnd - headersEnd); //Obtenemos la subcadena del body de la peticion, ya que hemos comprobado que hemos recibido todo el body. Y lo guardamos/parseamos en el objeto HTTPRequest del cliente.
-	// body = parser.cleanChunkedBody(rawBody); //Parseamos el body de la peticion y lo guardamos en el objeto HTTPRequest del cliente. (el body es un string).
-	body = rawBody; // IMP: POR EL MOMENTO HASTA QUE NO IMPLEMENTEMOS LAS FUNCIONES DEL CUHNKED, DEVOLVEMOS EL BODY SIN PARSEAR. Esto es importante porque si el cliente envia una peticion con Transfer-Encoding: chunked, significa que la peticion viene dividida en chunks y tenemos que parsearla correctamente para poder procesarla. Si no lo hacemos, no podremos procesar la peticion correctamente y devolveremos un error 501 Not Implemented.
 	if (config->getClientMaxBodySize() != 0 && body.size() > config->getClientMaxBodySize()) //Si el body de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
 		throw HTTPException(CONTENT_TOO_LARGE);
 	return true;
@@ -495,82 +489,10 @@ bool Server::processContentLengthBody(Client &client, const Config *config, cons
 		throw HTTPException(BAD_REQUEST); // Si no se puede parsear el Content-Length, devolvemos un error 400 Bad Request.
 	if (config->getClientMaxBodySize() != 0 && contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
 		throw HTTPException(CONTENT_TOO_LARGE);
-
-	requestEnd = parser.getRequestEnd(client.getRecvBuffer(), headersEnd, contentLength); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente.
-	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
-	{
-		std::cout << "Request length not complete yet." << std::endl;
+	if (!parser.parseContentLengthBody(client.getRecvBuffer(), headersEnd, contentLength, requestEnd, body)) //Parseamos el body de la peticion con Content-Length. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
 		return false;
-	}
-	body = client.getRecvBuffer().substr(headersEnd, requestEnd - headersEnd); //Obtenemos la subcadena del body de la peticion, ya que hemos comprobado que hemos recibido todo el body.
 	return true;
 }
-
-// /**
-//  * Processes the next HTTP request from a client's receive buffer.
-//  * 
-//  * @param clientSocket The socket connected to the client.
-//  * @return True if a complete request was processed, false otherwise.
-//  */
-// bool Server::processNextRequest(int clientSocket)
-// {
-// 	Client &client = getClient(clientSocket);
-// 	HTTPRequestParser parser;
-// 	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
-
-// 	size_t headersEnd = parser.getHeadersEnd(client.getRecvBuffer());
-// 	if (headersEnd == std::string::npos) //Si no hemos encontrado el final de una peticion, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
-// 	{
-// 		std::cout << "Request not complete yet." << std::endl;
-// 		return false;
-// 	}
-// 	try
-// 	{
-// 		std::string rawHeaders = client.getRecvBuffer().substr(0, headersEnd); //Obtenemos la subcadena de los headers de a peticion, ya que hemos comprobado que hemos recibido todos los headers.
-// 		parser.parseRequestLine(client.getRequest(), rawHeaders); //Parseamos la request line de la peticion y la guardamos en el objeto HTTPRequest del cliente. (el método, la ruta y la versión del protocolo).
-// 		parser.parseHeaders(client.getRequest(), rawHeaders); //Parseamos los headers de la peticion y los guardamos en el objeto HTTPRequest del cliente. (los headers son un map de key-value).
-// 		config = getConfigFromHost(client.getRequest().getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
-// 		if (config == NULL)
-// 			throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
-// 		size_t contentLength = 0;
-// 		if (client.getRequest().hasHeader("Content-Length"))
-// 		{
-// 			std::string value = client.getRequest().getHeader("Content-Length"); 
-// 			if (!StringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength. Si no se puede parsear, lanzamos una excepción indicando que la petición es incorrecta.
-// 				throw HTTPException(BAD_REQUEST); // Si no se puede parsear el Content-Length, devolvemos un error 400 Bad Request.
-// 		}
-// 		if (config->getClientMaxBodySize() != 0 && contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
-// 			throw HTTPException(CONTENT_TOO_LARGE);
-// 		size_t requestEnd = parser.getRequestEnd(client.getRecvBuffer(), headersEnd, contentLength); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
-// 		if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
-// 		{
-// 			std::cout << "Request not complete yet." << std::endl;
-// 			return false;
-// 		}
-// 		std::string rawBody = client.getRecvBuffer().substr(headersEnd, requestEnd - headersEnd); //Obtenemos la subcadena del body de la peticion, ya que hemos comprobado que hemos recibido todo el body. Y lo guardamos/parseamos en el objeto HTTPRequest del cliente.
-// 		parser.parseBody(client.getRequest(), rawBody); //Parseamos el body de la peticion y lo guardamos en el objeto HTTPRequest del cliente. (el body es un string).
-// 		std::string rawRequest = client.getRecvBuffer().substr(0, requestEnd); // IMP DEBUGGER Obtenemos la subcadena de la petición completa (headers + body) para poder mostrarla por pantalla y entenderla mejor. Luego se uede borrar.
-// 		client.getRecvBuffer().erase(0, requestEnd); //Eliminamos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
-// 		std::cout << "Request complete." << std::endl;
-// 		std::cout << "Imprimiendo request a procesar: " << std::endl << rawRequest << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
-// 		std::cout << "Imprimiendo resto de recvBuffer: " << std::endl << client.getRecvBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla el resto del buffer de recepcion del cliente y poder entenderlo. IMP: luego podemos quitarla.
-// 		client.getRequest().print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
-// 		updateClientKeepAlive(client); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
-
-// 		HTTPResponse response = handleRequest(client.getRequest(), config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
-// 		client.getSendBuffer() = response.serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
-// 		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
-// 		return true;
-// 	}
-// 	catch (const HTTPException &e)
-// 	{
-// 		HTTPResponse response = createErrorResponse(static_cast<HTTPStatus>(e.getStatusCode()), config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
-// 		client.getSendBuffer() = response.serialize();
-// 		client.setKeepAlive(false); // Si ocurre un error, cerramos la conexión con el cliente después de enviar la respuesta de error.
-// 		setPollEvent(clientSocket, POLLOUT);
-// 		return true;
-// 	}
-// }
 
 /**
  * Validates a configuration for a specific client checking the local address and port of the request.

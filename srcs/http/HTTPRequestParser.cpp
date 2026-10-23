@@ -124,12 +124,57 @@ void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &ra
 }
 
 /**
- * Parses the body of the HTTP request.
+ * Parses the body of an HTTP request with a Content-Length header.
+ *
+ * @param buffer The buffer containing the raw HTTP request string.
+ * @param bodyStart The position in the buffer where the body starts.
+ * @param bodyLength The length of the body.
+ * @param requestEnd The position in the buffer where the request ends. It will be updated by this function.
+ * @param body The parsed body string. It will be updated by this function.
+ * @return True if the body was parsed successfully, false if the request is incomplete or invalid.
+ */
+bool HTTPRequestParser::parseContentLengthBody(const std::string &buffer, size_t bodyStart, size_t bodyLength, size_t &requestEnd, std::string &body)
+{
+	requestEnd = getContentLengthRequestEnd(buffer, bodyStart, bodyLength); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente.
+	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+	{
+		std::cout << "Request length not complete yet." << std::endl;
+		return false;
+	}
+	body = buffer.substr(bodyStart, requestEnd - bodyStart); //Obtenemos la subcadena del body de la peticion, ya que hemos comprobado que hemos recibido todo el body.
+	return true;
+}
+
+/**
+ * Parses a chunked body of an HTTP request.
+ * 
+ * buffer: The buffer containing the raw HTTP request string.
+ * bodyStart: The position in the buffer where the body starts.
+ * requestEnd: The position in the buffer where the request ends. It will be updated by this function.
+ * body: The parsed body string. It will be updated by this function.
+ * @return True if the body was parsed successfully, false if the request is incomplete or invalid. It throws an HTTPException if the request is invalid.
+ * @throws HTTPException if the request is malformed.
+ */
+bool HTTPRequestParser::parseChunkedBody(const std::string &buffer, size_t bodyStart, size_t &requestEnd, std::string &body)
+{
+	requestEnd = getChunkedRequestEnd(buffer, bodyStart); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Aqui buscamos el 
+	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+	{
+		std::cout << "Request chunked not complete yet." << std::endl;
+		return false;
+	}
+	std::string rawBody = buffer.substr(bodyStart, requestEnd - bodyStart); //Obtenemos la subcadena del body de la peticion, ya que hemos comprobado que hemos recibido todo el body. Y lo guardamos/parseamos en el objeto HTTPRequest del cliente.
+	body = cleanChunkedBody(rawBody); //Parseamos el body de la peticion y lo guardamos en el objeto HTTPRequest del cliente. (el body es un string).
+	return true;
+}
+
+/**
+ * Parses the normalized body of the HTTP request after it's been processed through Chunked or content-length parsing.
  * 
  * request: The HTTPRequest object to populate.
  * body: The body string to parse.
  */
-void HTTPRequestParser::parseBody(HTTPRequest& request, const std::string& body)
+void HTTPRequestParser::parseNormalizedBody(HTTPRequest& request, const std::string& body)
 {
 	if (request.isBodyParsed())
 		return ; // Si el body ya ha sido parseado, no hacemos nada.
@@ -162,7 +207,7 @@ size_t HTTPRequestParser::getHeadersEnd(const std::string &buffer)
  * bodyLength: The length of the body.
  * @return The position of the end of the request, or std::string::npos if the request is incomplete.
  */
-size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength)
+size_t HTTPRequestParser::getContentLengthRequestEnd(const std::string &buffer, size_t bodyStart, size_t bodyLength)
 {
 	size_t maxValue = std::numeric_limits<size_t>::max();
 
@@ -177,6 +222,14 @@ size_t HTTPRequestParser::getRequestEnd(const std::string &buffer, size_t bodySt
 	return requestEnd;
 }
 
+/**
+ * Gets the position of the end of a chunked HTTP request.
+ *
+ * buffer: The buffer containing the raw HTTP request string.
+ * bodyStart: The position in the buffer where the body starts.
+ * @return The position of the end of the request, or std::string::npos if the request is incomplete.
+ * @throws HTTPException if the request is malformed.
+ */
 size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t bodyStart)
 {
 	size_t pos = bodyStart;
@@ -211,10 +264,26 @@ size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t
 
 std::string HTTPRequestParser::cleanChunkedBody(const std::string& rawBody)
 {
-	// Implement the logic to clean the chunked body and return the actual body content
-	(void)rawBody;
-	// For now, return an empty string. You will need to implement the actual logic to clean the chunked body based on the chunked transfer encoding rules.
-	return std::string();
+	std::string cleanedBody;
+	size_t pos = 0;
+	while (true)
+	{
+		size_t lineEnd = rawBody.find("\r\n", pos);
+		if (lineEnd == std::string::npos)
+			throw HTTPException(BAD_REQUEST);
+		std::string chunkSizeStr = rawBody.substr(pos, lineEnd - pos);
+		size_t chunkSize = 0;
+		if (!StringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
+			throw HTTPException(BAD_REQUEST);
+		if (chunkSize == 0) // Si el tamaño del chunk es 0, significa que hemos llegado al final del body chunked.
+			break;
+		pos = lineEnd + 2;
+		if (chunkSize > rawBody.size() - pos) //Si el chunk data no está completo, lanzamos una excepción indicando que la petición es incorrecta.
+			throw HTTPException(BAD_REQUEST);
+		cleanedBody.append(rawBody.substr(pos, chunkSize)); //Añadimos el chunk data al cleanedBody.
+		pos += chunkSize + 2; //Avanzamos la posición al final del chunk data más los 2 bytes del \r\n del final del chunk.
+	}
+	return cleanedBody;
 }
 
 /**
