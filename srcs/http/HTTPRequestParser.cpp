@@ -245,12 +245,15 @@ size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t
 		pos = lineEnd + 2;
 		if (chunkSize == 0) // Si el tamaño del chunk es 0, significa que hemos llegado al final del body chunked, por lo que devolvemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente.
 		{
-			if (2 > buffer.size() - pos) //Si los 2 bytes del final del chunk no están completos, devolvemos std::string::npos. Lo comprobamos restando para evitar el overflow del size_t en la suma.
-				return std::string::npos;
-			else if (buffer[pos] != '\r' || buffer[pos + 1] != '\n') //Si los 2 bytes del final del chunk no son \r\n, significa que la petición es incorrecta, por lo que lanzamos una excepción.
-				throw HTTPException(BAD_REQUEST);
-			else
-				return pos + 2; 
+			while (true) //Si hay trailers, avanzamos la posición hasta el final de la petición completa (headers + body + trailers) en el buffer de recepción del cliente. 
+			{//CONTINUAR AQUI: Hacer las pruebas que dice CHATGPT (pasadas 1 2 y 3) Y LUEGO PENSAR EN SI HAY QUE PARSEAR LOS TRAILERS.
+				lineEnd = buffer.find("\r\n", pos); //Buscamos el final de la linea. Puede haber trailers, que son headers adicionales que se envían después del body chunked. 
+				if (lineEnd == std::string::npos)
+					return std::string::npos;
+				if (lineEnd == pos) //Si encontramos una línea vacía, significa que hemos llegado al final de los trailers y por lo tanto al final de la petición completa (headers + body + trailers) en el buffer de recepción del cliente.
+					return pos + 2; // +2 para incluir el \r\n final de la línea vacía.
+				pos = lineEnd + 2; //Si la linea no es vacía, avanzamos la posición al final de la línea de trailer +2 para incluir el \r\n y seguimos buscando el final de la petición.
+			}
 		}
 		if (chunkSize > buffer.size() - pos) //Si el chunk data no está completo, devolvemos std::string::npos. Lo comprobamos restando para evitar el overflow del size_t en la suma.
 			return std::string::npos;
