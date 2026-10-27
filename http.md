@@ -85,3 +85,7 @@ struct addrinfo
     addrinfo *ai_next; // un puntero a la siguiente estructura addrinfo en la lista. Si cuando llamamos a getaddrinfo en hints le pasamos el flag para todas las interfaces IPv4 y IPv6, nos devolverá una lista de estructuras addrinfo, una por cada interfaz. Este puntero nos permite recorrer la lista de estructuras addrinfo.
 };
 ```
+Prueba desde terminal:
+```bash
+printf 'POST / HTTP/1.1\r\nHost: 192.168.1.89:8080\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nHello\r\n0\r\nX-Test: hola\r\n\r\nGET / HTTP/1.1\r\nHost: 192.168.1.89:8080\r\nConnection: close\r\n\r\n' | nc 192.168.1.89 8080
+```

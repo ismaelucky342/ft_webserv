@@ -10,6 +10,7 @@
 #include "http/HTTPRequest.hpp"
 #include "http/HTTPRequestParser.hpp"
 #include "http/HTTPStatus.hpp"
+#include "http/HTTPException.hpp"
 #include "server/Client.hpp"
 #include "server/ServerSocket.hpp"
 class Server
@@ -41,7 +42,7 @@ private:
 	bool isMethodAllowed(const HTTPRequest &request, const Location *location);
 	//Response handling
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
-	HTTPResponse createErrorResponse(HTTPStatus statusCode, const Config *config);
+	HTTPResponse createErrorResponse(const HTTPException &e, const Config *config);
 	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
 	HTTPResponse createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget);
 	HTTPResponse createAutoIndexResponse(const std::string &requestPath);

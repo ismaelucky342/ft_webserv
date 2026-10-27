@@ -260,7 +260,7 @@ void Server::readFromClient(int clientSocket)
 	char buffer[4096];
 	Client &client = getClient(clientSocket);
 
-	ssize_t bytes = recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
+	ssize_t bytes = recv(clientSocket, buffer, sizeof(buffer), 0); //Leemos lo que nos envia el cliente
 	// bytes > 0: data received, bytes == 0: client disconnected in a good way, bytes < 0: error
 	std::cout << "recv() returned: " << bytes << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (bytes == 0)
@@ -275,7 +275,6 @@ void Server::readFromClient(int clientSocket)
 		disconnectClient(clientSocket);
 		return;
 	}
-	buffer[bytes] = '\0';
 	std::cout << "Request received: " << buffer << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
 	client.getRecvBuffer().append(buffer, bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 
@@ -370,7 +369,7 @@ void Server::updateClientKeepAlive(Client &client)
 	else if (version == "HTTP/1.0")
 		client.setKeepAlive(connection == "keep-alive"); // En HTTP/1.0, la conexión no es persistente por defecto, a menos que se indique "Connection: keep-alive".
 	else
-		throw HTTPException(HTTP_VERSION_NOT_SUPPORTED); // Si la versión del protocolo no es ni HTTP/1.0 ni HTTP/1.1, lanzamos una excepción indicando que la versión no es soportada.
+		throw HTTPException(HTTP_VERSION_NOT_SUPPORTED, true); // Si la versión del protocolo no es ni HTTP/1.0 ni HTTP/1.1, lanzamos una excepción indicando que la versión no es soportada.
 }
 
 /**
@@ -398,7 +397,7 @@ bool Server::processNextRequest(int clientSocket)
 		parser.parseHeaders(client.getRequest(), rawHeaders); //Parseamos los headers de la peticion y los guardamos en el objeto HTTPRequest del cliente. (los headers son un map de key-value).
 		config = getConfigFromHost(client.getRequest().getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 		if (config == NULL)
-			throw HTTPException(FORBIDDEN); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
+			throw HTTPException(FORBIDDEN, true); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
 		
 		size_t requestEnd = std::string::npos;
 		std::string  body;
@@ -435,9 +434,10 @@ bool Server::processNextRequest(int clientSocket)
 	}
 	catch (const HTTPException &e)
 	{
-		HTTPResponse response = createErrorResponse(static_cast<HTTPStatus>(e.getStatusCode()), config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
+		HTTPResponse response = createErrorResponse(e, config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
 		client.getSendBuffer() = response.serialize();
-		client.setKeepAlive(false); // Si ocurre un error, cerramos la conexión con el cliente después de enviar la respuesta de error.
+		if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
+			client.setKeepAlive(false);
 		setPollEvent(clientSocket, POLLOUT);
 		return true;
 	}
@@ -458,14 +458,14 @@ bool Server::processChunkedBody(Client &client, const Config *config, const size
 	HTTPRequestParser parser;
 
 	if (client.getRequest().hasHeader("Content-Length")) //No se aceptan transfer-encoding y content-length a la vez, porque es una contradicción. Si el cliente envia ambos headers, devolvemos un error 400 Bad Request.
-		throw HTTPException(BAD_REQUEST);
+		throw HTTPException(BAD_REQUEST, true);
 	std::string transferEncoding = StringUtils::toLowerString(client.getRequest().getHeader("Transfer-Encoding")); //Obtenemos el valor del header Transfer-Encoding y lo pasamos a minúsculas para poder compararlo con "chunked". Porque HTTP en la codificacion no diferencia entre mayusculas y minusculas en el tipo de la codificación de transferencia. Chunked sería tan válido como CHUNKED o Chunked.
 	if (transferEncoding != "chunked")
-		throw HTTPException(NOT_IMPLEMENTED);
-	if (!parser.parseChunkedBody(client.getRecvBuffer(), headersEnd, requestEnd, body)) //Parseamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
+		throw HTTPException(NOT_IMPLEMENTED, true);
+	if (!parser.parseChunkedBody(client.getRecvBuffer(), headersEnd, config->getClientMaxBodySize(), requestEnd, body)) //Parseamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
 		return false;
-	if (config->getClientMaxBodySize() != 0 && body.size() > config->getClientMaxBodySize()) //Si el body de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
-		throw HTTPException(CONTENT_TOO_LARGE);
+	// if (config->getClientMaxBodySize() != 0 && body.size() > config->getClientMaxBodySize()) //Si el body de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
+	// 	throw HTTPException(CONTENT_TOO_LARGE);
 	return true;
 }
 
@@ -485,10 +485,10 @@ bool Server::processContentLengthBody(Client &client, const Config *config, cons
 	size_t contentLength = 0;
 	std::string value = client.getRequest().getHeader("Content-Length");
 
-	if (!StringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength. Si no se puede parsear, lanzamos una excepción indicando que la petición es incorrecta.
-		throw HTTPException(BAD_REQUEST); // Si no se puede parsear el Content-Length, devolvemos un error 400 Bad Request.
+	if (!StringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength.
+		throw HTTPException(BAD_REQUEST, true); // Si no se puede parsear el Content-Length porque tiene un formato incorrecto para un size_t, devolvemos un error 400 Bad Request.
 	if (config->getClientMaxBodySize() != 0 && contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
-		throw HTTPException(CONTENT_TOO_LARGE);
+		throw HTTPException(CONTENT_TOO_LARGE, true);
 	if (!parser.parseContentLengthBody(client.getRecvBuffer(), headersEnd, contentLength, requestEnd, body)) //Parseamos el body de la peticion con Content-Length. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
 		return false;
 	return true;
@@ -506,7 +506,7 @@ const Config *Server::isValidConfig(const Config *config, int clientSocket)
 	struct sockaddr_in localAddr;
 	socklen_t addrLen = sizeof(localAddr);
 	if (getsockname(clientSocket, (struct sockaddr *)&localAddr, &addrLen)< 0)
-		throw HTTPException(INTERNAL_SERVER_ERROR);
+		throw HTTPException(INTERNAL_SERVER_ERROR, true);
 	std::string localInterface = inet_ntoa(localAddr.sin_addr);
 	int localPort = ntohs(localAddr.sin_port);
 	std::cout << "---------------------------------------------Local interface: " << localInterface << ", Local port: " << localPort << std::endl; //IMP: PARA DEBUG borrar luego.
@@ -576,7 +576,7 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 			index = location->getIndex();
 	}
 	if (!isMethodAllowed(request, location)) // Si no se permite el método, devolvemos un error 405 Method Not Allowed.
-		throw HTTPException(METHOD_NOT_ALLOWED);
+		throw HTTPException(METHOD_NOT_ALLOWED, false);
 	srcPath = root + request.getPath();
 	std::cout << "ROOT: " << root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::cout << "PATH: " << request.getPath() << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
@@ -584,17 +584,17 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
 	{
 		if (errno == ENOENT) // Si el error es que no existe el fichero o directorio, devolvemos un error 404 Not Found.
-			throw HTTPException(NOT_FOUND);
+			throw HTTPException(NOT_FOUND, false);
 		if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
-			throw HTTPException(FORBIDDEN);
+			throw HTTPException(FORBIDDEN, false);
 		else // Si el error es otro, devolvemos un error 500 Internal Server Error.
-			throw HTTPException(INTERNAL_SERVER_ERROR);
+			throw HTTPException(INTERNAL_SERVER_ERROR, false);
 	}
 	if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
 	{
 		std::ifstream file_stream(srcPath.c_str());
 		if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
-			throw HTTPException(FORBIDDEN);
+			throw HTTPException(FORBIDDEN, false);
 		else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 		{
 			std::ostringstream bodystream;
@@ -617,18 +617,18 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 					if (location != NULL && location->getAutoindex()) // Si la location tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
 						return createAutoIndexResponse(request.getPath());
 					else
-						throw HTTPException(FORBIDDEN); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
+						throw HTTPException(FORBIDDEN, false); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
 				}
 				if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
-					throw HTTPException(FORBIDDEN);
+					throw HTTPException(FORBIDDEN, false);
 				else // Si el error es otro, devolvemos un error 500 Internal Server Error.
-					throw HTTPException(INTERNAL_SERVER_ERROR);
+					throw HTTPException(INTERNAL_SERVER_ERROR, false);
 			}
 			if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
 			{
 				std::ifstream file_stream(srcPath.c_str());
 				if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
-					throw HTTPException(FORBIDDEN);
+					throw HTTPException(FORBIDDEN, false);
 				else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 				{
 					std::ostringstream bodystream;
@@ -637,10 +637,10 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 					return createResponse(OK, getContentType(srcPath), body);
 				}
 			}
-			throw HTTPException(FORBIDDEN);
+			throw HTTPException(FORBIDDEN, false);
 		}
 	}
-	throw HTTPException(FORBIDDEN);
+	throw HTTPException(FORBIDDEN, false);
 }
 
 // HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
@@ -728,8 +728,9 @@ HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &co
  * @param config The configuration object.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const Config *config)
+HTTPResponse Server::createErrorResponse(const HTTPException &e, const Config *config)
 {
+	HTTPStatus statusCode = static_cast<HTTPStatus>(e.getStatusCode());
 	std::ostringstream errorPagePathStream;
 
 	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error por defecto con el código de error y el mensaje correspondiente.
@@ -749,7 +750,8 @@ HTTPResponse Server::createErrorResponse(HTTPStatus statusCode, const Config *co
 		std::string body = bodystream.str();
 		response = createResponse(statusCode, getContentType(errorPagePathStream.str()), body);
 	}
-	response.setHeader("Connection", "close"); // En caso de error, cerramos la conexión con el cliente después de enviar la respuesta de error. Avisamos al cliente de que la conexión se cerrará después de enviar la respuesta de error.
+	if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
+		response.setHeader("Connection", "close"); // Avisamos al cliente de que la conexión se cerrará después de enviar la respuesta de error.
 	return response;
 }
 

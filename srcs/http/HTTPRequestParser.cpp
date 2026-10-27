@@ -77,16 +77,16 @@ void HTTPRequestParser::parseRequestLine(HTTPRequest &request, const std::string
 	std::string requestLine;
 
 	if (!std::getline(rawStream, requestLine))
-		throw HTTPException(BAD_REQUEST);
+		throw HTTPException(BAD_REQUEST, true);
 
 	std::istringstream requestLineStream(requestLine);
 	std::string method, path, version, extra;
 
 	if (!(requestLineStream >> method >> path >>
 		  version)) // Intenta leer exactamente los tres campos de la request line. Si alguna lectura falla, el stream entra en estado de error.
-		throw HTTPException(BAD_REQUEST);
+		throw HTTPException(BAD_REQUEST, true);
 	if (requestLineStream >> extra) //si hay más datos en el stream, es un error
-		throw HTTPException(BAD_REQUEST);
+		throw HTTPException(BAD_REQUEST, true);
 
 	parseMethod(request, method);
 	parsePath(request, path);
@@ -100,7 +100,7 @@ void HTTPRequestParser::parseRequestLine(HTTPRequest &request, const std::string
  * request: The HTTPRequest object to populate.
  * rawRequest: The raw HTTP request string.
  */
-void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &rawRequest) //IMP Mejorar el parseo aqui también. de momento para probar bien.
+void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &rawRequest) //IMPORTANTE Mejorar el parseo aqui también. de momento para probar bien.
 {
 	if (request.areHeadersParsed())
 		return ; // Si los headers ya han sido parseados, no hacemos nada.
@@ -109,7 +109,7 @@ void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &ra
 	std::string requestLine, headerLine, key, value;
 
 	if (!std::getline(rawStream, requestLine))
-		throw HTTPException(BAD_REQUEST);
+		throw HTTPException(BAD_REQUEST, true);
 
 	while (std::getline(rawStream, headerLine) && headerLine != "\r")
 	{
@@ -117,7 +117,7 @@ void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &ra
 		if (!headerLine.empty() && headerLine[headerLine.size() - 1] == '\r') // Asi que sin no esta vacio y el ultimo caracter es '\r', lo eliminamos.
 			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
 
-		parseHeaderLine(headerLine, key, value);
+		parseHeaderLine(headerLine, key, value); //IMPORTANTE hacer la comprobacion de headers repetidas
 		request.setHeader(StringUtils::toLowerString(key), value);
 	}
 	request.setHeadersParsed(true); // Marcamos que los headers han sido parseados correctamente.
@@ -150,14 +150,15 @@ bool HTTPRequestParser::parseContentLengthBody(const std::string &buffer, size_t
  * 
  * buffer: The buffer containing the raw HTTP request string.
  * bodyStart: The position in the buffer where the body starts.
+ * maxBodySize: The maximum allowed size of the body. If the parsed body exceeds this size, an exception will be thrown.
  * requestEnd: The position in the buffer where the request ends. It will be updated by this function.
  * body: The parsed body string. It will be updated by this function.
  * @return True if the body was parsed successfully, false if the request is incomplete or invalid. It throws an HTTPException if the request is invalid.
  * @throws HTTPException if the request is malformed.
  */
-bool HTTPRequestParser::parseChunkedBody(const std::string &buffer, size_t bodyStart, size_t &requestEnd, std::string &body)
+bool HTTPRequestParser::parseChunkedBody(const std::string &buffer, size_t bodyStart, const size_t maxBodySize, size_t &requestEnd, std::string &body)
 {
-	requestEnd = getChunkedRequestEnd(buffer, bodyStart); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Aqui buscamos el 
+	requestEnd = getChunkedRequestEnd(buffer, bodyStart, maxBodySize); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Aqui buscamos el 
 	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 	{
 		std::cout << "Request chunked not complete yet." << std::endl;
@@ -211,8 +212,8 @@ size_t HTTPRequestParser::getContentLengthRequestEnd(const std::string &buffer, 
 {
 	size_t maxValue = std::numeric_limits<size_t>::max();
 
-	if (bodyStart > maxValue - bodyLength) // truco: Lo compruebo representandolo con la resta (despejando la ecuación) para evitar el overflow en la suma
-		throw HTTPException(BAD_REQUEST);
+	if (bodyStart > maxValue - bodyLength) // Si supera el max de un size_t. truco: Lo compruebo representandolo con la resta (despejando la ecuación) para evitar el overflow en la suma
+		throw HTTPException(BAD_REQUEST, true);
 
 	size_t requestEnd = bodyStart + bodyLength;
 
@@ -230,10 +231,12 @@ size_t HTTPRequestParser::getContentLengthRequestEnd(const std::string &buffer, 
  * @return The position of the end of the request, or std::string::npos if the request is incomplete.
  * @throws HTTPException if the request is malformed.
  */
-size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t bodyStart)
+size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t bodyStart, const size_t maxBodySize)
 {
 	size_t pos = bodyStart;
-	while (true)
+	size_t totalBodySize = 0;
+	size_t maxValue = std::numeric_limits<size_t>::max();
+	while (true)  //Ejemplo de body chunked: 5\r\nhello\r\n0\r\n\r\n
 	{
 		size_t lineEnd = buffer.find("\r\n", pos);
 		if (lineEnd == std::string::npos)
@@ -241,7 +244,7 @@ size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t
 		std::string chunkSizeStr = buffer.substr(pos, lineEnd - pos);
 		size_t chunkSize = 0;
 		if (!StringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
-			throw HTTPException(BAD_REQUEST);
+			throw HTTPException(BAD_REQUEST, true);
 		pos = lineEnd + 2;
 		if (chunkSize == 0) // Si el tamaño del chunk es 0, significa que hemos llegado al final del body chunked, por lo que devolvemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente.
 		{
@@ -255,12 +258,17 @@ size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t
 				pos = lineEnd + 2; //Si la linea no es vacía, avanzamos la posición al final de la línea de trailer +2 para incluir el \r\n y seguimos buscando el final de la petición.
 			}
 		}
+		if (maxBodySize != 0 && (chunkSize > maxBodySize || totalBodySize > maxBodySize - chunkSize))//Si el tamaño actual del body es mayor que el client_max_body_size del config, lanzamos una excepción indicando que el bodyu es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
+			throw HTTPException(CONTENT_TOO_LARGE, true);
+		if (chunkSize > maxValue - totalBodySize) // Comprobamos que la suma no sobrepase el valor máximo de size_t para evitar overflow. Si lo sobrepasa, lanzamos una excepción indicando que la petición es incorrecta.
+			throw HTTPException(BAD_REQUEST, true);
 		if (chunkSize > buffer.size() - pos) //Si el chunk data no está completo, devolvemos std::string::npos. Lo comprobamos restando para evitar el overflow del size_t en la suma.
 			return std::string::npos;
 		if (2 > buffer.size() - pos - chunkSize) //Si los 2 bytes del final del chunk no están completos, devolvemos std::string::npos. Lo comprobamos restando para evitar el overflow del size_t en la suma.
 			return std::string::npos;
 		if (buffer[pos + chunkSize] != '\r' || buffer[pos + chunkSize + 1] != '\n') //Si los 2 bytes del final del chunk no son \r\n, significa que la petición es incorrecta, por lo que lanzamos una excepción.
-			throw HTTPException(BAD_REQUEST);
+			throw HTTPException(BAD_REQUEST, true);
+		totalBodySize += chunkSize; //Acumulamos el tamaño del body cuando ya tenemos los datos del chunk recibidos correctamente. Para comprobar que no sobrepase el client_max_body_size del config.
 		pos += chunkSize + 2; //Avanzamos la posición al final del chunk data más los 2 bytes del \r\n del final del chunk.
 	}
 }
@@ -273,16 +281,16 @@ std::string HTTPRequestParser::cleanChunkedBody(const std::string& rawBody)
 	{
 		size_t lineEnd = rawBody.find("\r\n", pos);
 		if (lineEnd == std::string::npos)
-			throw HTTPException(BAD_REQUEST);
+			throw HTTPException(BAD_REQUEST, true);
 		std::string chunkSizeStr = rawBody.substr(pos, lineEnd - pos);
 		size_t chunkSize = 0;
 		if (!StringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
-			throw HTTPException(BAD_REQUEST);
+			throw HTTPException(BAD_REQUEST, true);
 		if (chunkSize == 0) // Si el tamaño del chunk es 0, significa que hemos llegado al final del body chunked.
 			break;
 		pos = lineEnd + 2;
 		if (chunkSize > rawBody.size() - pos) //Si el chunk data no está completo, lanzamos una excepción indicando que la petición es incorrecta.
-			throw HTTPException(BAD_REQUEST);
+			throw HTTPException(BAD_REQUEST, true);
 		cleanedBody.append(rawBody.substr(pos, chunkSize)); //Añadimos el chunk data al cleanedBody.
 		pos += chunkSize + 2; //Avanzamos la posición al final del chunk data más los 2 bytes del \r\n del final del chunk.
 	}
@@ -298,7 +306,7 @@ std::string HTTPRequestParser::cleanChunkedBody(const std::string& rawBody)
 void HTTPRequestParser::parseMethod(HTTPRequest &request, const std::string &method)
 {
 	if (method != "GET" && method != "POST" && method != "DELETE")
-		throw HTTPException(METHOD_NOT_ALLOWED);
+		throw HTTPException(NOT_IMPLEMENTED, true);
 	request.setMethod(stringToHTTPMethod(method));
 }
 
@@ -311,7 +319,7 @@ void HTTPRequestParser::parseMethod(HTTPRequest &request, const std::string &met
 void HTTPRequestParser::parsePath(HTTPRequest &request, const std::string &path)
 {
 	if (path.empty() || path[0] != '/')
-		throw HTTPException(BAD_REQUEST);
+		throw HTTPException(BAD_REQUEST, true);
 	request.setPath(path);
 }
 
@@ -323,9 +331,9 @@ void HTTPRequestParser::parsePath(HTTPRequest &request, const std::string &path)
  */
 void HTTPRequestParser::parseVersion(HTTPRequest &request, const std::string &version)
 {
-	//Pensar si aceptamos también HTTP/1.0, o solo HTTP/1.1. Por ahora solo aceptamos HTTP/1.1
-	if (version != "HTTP/1.1")
-		throw HTTPException(BAD_REQUEST);
+	//Pensar si aceptamos también HTTP/1.0, o solo HTTP/1.1.
+	if (version != "HTTP/1.1" && version != "HTTP/1.0")
+		throw HTTPException(BAD_REQUEST, true);
 	request.setVersion(version);
 }
 
@@ -340,11 +348,11 @@ void HTTPRequestParser::parseHeaderLine(std::string &headerLine, std::string &ke
 {
 	size_t colonPos = headerLine.find(':');
 		if (colonPos == std::string::npos)
-			throw HTTPException(BAD_REQUEST);
+			throw HTTPException(BAD_REQUEST, true);
 
 		key = headerLine.substr(0, colonPos);
 		if (key.empty()) //IMP: quizás validar que las nombres de los header sean validos o al menos que no tengan espacios dentro? No lo se.
-			throw HTTPException(BAD_REQUEST);
+			throw HTTPException(BAD_REQUEST, true);
 		value = headerLine.substr(colonPos + 1);
 
 		// Quitamos espacios y tabs del principio del valor
