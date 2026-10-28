@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/18 11:22:32 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/28 17:32:16 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #include <sstream>	// std::ostringstream
 #include <cstdlib>	// exit()
 #include <netdb.h>	// getaddrinfo(), freeaddrinfo()
+#include <fcntl.h> // fcntl()
 
 #include "server/ServerSocket.hpp"
 #include <cstring>
@@ -115,13 +116,25 @@ void ServerSocket::freeAddressInfo()
 void ServerSocket::createSocket()
 {
 	_serverSocketFd = socket(_addrInfo->ai_family, _addrInfo->ai_socktype, _addrInfo->ai_protocol);
-	std::cout
-		<< "Socket descriptor: " << _serverSocketFd
-		<< std::
-			   endl; //IMP: Se podria borrar. solo era para debugueary entender bien el flujo de la creacion del socket.
+	std::cout << "Socket descriptor: " << _serverSocketFd << std::endl; //IMP: Se podria borrar. solo era para debugueary entender bien el flujo de la creacion del socket.
 	if (_serverSocketFd == -1)
 	{
 		std::cerr << "Error creating socket" << std::endl;
+		exit(EXIT_FAILURE);
+	}
+
+	int flags = fcntl(_serverSocketFd, F_GETFL, 0); // Obtenemos los flags actuales del socket para poder modificarlos y poner el socket en modo no bloqueante.
+	if (flags == -1)
+	{
+		std::cerr << "Error getting socket flags" << std::endl;
+		close(_serverSocketFd);
+		exit(EXIT_FAILURE);
+	}
+
+	if (fcntl(_serverSocketFd, F_SETFL, flags | O_NONBLOCK) == -1) // Ponemos el socket en modo no bloqueante para que las operaciones de lectura y escritura no bloqueen el flujo del programa. Esto es importante para poder manejar múltiples clientes simultáneamente sin que uno de ellos bloquee a los demás.
+	{
+		std::cerr << "Error setting socket non-blocking" << std::endl;
+		close(_serverSocketFd);
 		exit(EXIT_FAILURE);
 	}
 }

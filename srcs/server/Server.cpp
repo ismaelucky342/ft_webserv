@@ -1,4 +1,17 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Server.cpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
+/*   Updated: 2026/10/28 18:44:08 by mvidal-h         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include <unistd.h> // close()
+#include <fcntl.h> // fcntl()
 #include <iostream>
 #include <fstream>		// std::ifstream
 #include <sstream>		// std::ostringstream
@@ -233,11 +246,23 @@ void Server::acceptClient(ServerSocket &serverSocket)
 		std::cerr << "Error accepting client connection" << std::endl;
 		return;
 	}
-	std::cout
-		<< "New client connected: " << inet_ntoa(clientAddr.sin_addr) << ":"
-		<< ntohs(clientAddr.sin_port)
-		<< std::
-			   endl; //IMP: Para depuracion y entender mejor. inet_ntoa convierte la dirección IP del cliente de formato binario a formato de cadena legible. ntohs convierte el puerto del cliente de orden de bytes de red a orden de bytes del host para que se pueda mostrar correctamente.
+
+	int flags = fcntl(clientSocket, F_GETFL, 0); // Obtenemos los flags actuales del socket para poder modificarlos y poner el socket en modo no bloqueante.
+	if (flags == -1)
+	{
+		std::cerr << "Error getting client socket flags" << std::endl;
+		close(clientSocket);
+		return;
+	}
+
+	if (fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK) == -1) // Ponemos el socket del cliente en modo no bloqueante para que las operaciones de lectura y escritura no bloqueen el flujo del programa. Esto es importante para poder manejar múltiples clientes simultáneamente sin que uno de ellos bloquee a los demás.
+	{
+		std::cerr << "Error setting client socket non-blocking" << std::endl;
+		close(clientSocket);
+		return;
+	}
+
+	std::cout << "New client connected: " << inet_ntoa(clientAddr.sin_addr) << ":" << ntohs(clientAddr.sin_port) << std::endl; //IMP: Para depuracion y entender mejor. inet_ntoa convierte la dirección IP del cliente de formato binario a formato de cadena legible. ntohs convierte el puerto del cliente de orden de bytes de red a orden de bytes del host para que se pueda mostrar correctamente.
 
 	struct pollfd
 		clientPoll; //Creamos un nuevo pollfd para el cliente que acabamos de aceptar. Este pollfd nos permitirá escuchar los eventos que ocurran en el socket del cliente, como datos entrantes (POLLIN) o desconexión (POLLHUP).
@@ -275,7 +300,7 @@ void Server::readFromClient(int clientSocket)
 		disconnectClient(clientSocket);
 		return;
 	}
-	std::cout << "Request received: " << buffer << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
+	std::cout << "Request received: "; std::cout.write(buffer, bytes); std::cout << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
 	client.getRecvBuffer().append(buffer, bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 
 	processNextRequest(clientSocket);
