@@ -27,10 +27,11 @@ private:
 	void printPollFds() const; // IMP: Para depuracion y entender mejor. Muestra por pantalla los fds que estamos escuchando y sus eventos.
 	//Client handling
 	void acceptClient(ServerSocket &serverSocket);
-	void readFromClient(int clientSocket);
-	void writeToClient(int clientSocket);
+	bool readFromClient(int clientSocket);
+	bool writeToClient(int clientSocket);
 	Client &getClient(int clientSocket);
 	void disconnectClient(int clientSocket);
+	void cleanupDisconnectedClients();
 	void updateClientKeepAlive(Client &client);
 	//Request handling
 	bool processNextRequest(int clientSocket);

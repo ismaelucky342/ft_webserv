@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/29 18:04:18 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/30 15:32:37 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -150,50 +150,53 @@ void Server::runLoop()
 	{
 		std::cout << "---- BEFORE POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
-		int pollCount = poll(
-			_pollFds.data(), _pollFds.size(),
-			-1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito)
-
+		size_t fdsSize = _pollFds.size(); // Guardo el tamaño del vector de pollfd antes de entrar en el bucle, porque si aceptamos un nuevo cliente, el tamaño del vector aumentará y así evitamos recorrer los nuevos elementos añadidos en esta vuelta del bucle, que no tienen eventos pendientes y que podrían causar problemas.
+		int pollCount = poll(_pollFds.data(), fdsSize, -1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito)
 		std::cout << "---- AFTER POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		std::cout << "poll() returned " << pollCount << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
+
 		if (pollCount == -1)
 		{
 			std::cerr << "Error in poll()" << std::endl;
 			continue;
 		}
-		for (
-			size_t i = 0; i < _pollFds.size(); ++i) //Cuando ocurre un evento en cualquiera de los elementos en los que esta escuchando el poll, se sale y tenemos que recorrerlos con el bucle pasando por todos (incluso los que no tienen eventos activos en su revent.)
+		for (size_t i = 0; i < fdsSize; ++i) //Cuando ocurre un evento en cualquiera de los elementos en los que esta escuchando el poll, se sale y tenemos que recorrerlos con el bucle pasando por todos (incluso los que no tienen eventos activos en su revent.)
 		{
-			struct pollfd &pfd = _pollFds[i];
+			struct pollfd pfd = _pollFds[i]; // Hacemos copia local para evitar problemas de invalidacion de referencias (cuando un vector crece, puede mover toda la info a un nuevo bloque y esto invalida los punteros y referencias.) Estp puede ocurrir al aceptar nuevos clientes y añadirlos al vector. La copia local hace que como no tenemos que modificar nada de esa copia, nos evite el rpblema de la referencia.
+			if (pfd.fd == -1 || pfd.revents == 0) // Si el fd es -1, significa que es un elemento inválido (ya no lo estamos escuchando). Si revents es 0, significa que no hay eventos pendientes en este fd. En ambos casos, pasamos al siguiente elemento.
+				continue;
 			ServerSocket *serverSocket = getServerSocketByFd(pfd.fd);
-
-			if (serverSocket !=
-				NULL) //Si el elemento es uno de los sockets de servidor, entonces es una nueva conexion entrante y tenemos que aceptarla. Si no es un socket de servidor, entonces es un socket de cliente y tenemos que leer o escribir en el.
+			if (serverSocket != NULL) //Si el elemento es uno de los sockets de servidor, entonces es una nueva conexion entrante y tenemos que aceptarla. Si no es un socket de servidor, entonces es un socket de cliente y tenemos que leer o escribir en el.
 			{
-				if (pfd.revents &
-					POLLIN) // Si el elemento es el propio servidor y tiene un evento pendiente (revents != 0) y ese evento es POLLIN (una nueva conexión entrante). EL & es un and bit a bit, porque el revent se maneja por bits para cada tipo de evento. Si el revent tiene el bit de POLLIN activado, significa que hay datos para leer o una nueva conexión entrante. Por eso se hace en & con el bit del POLLIN que nos asegura que, al menos el bit del POLLIN esta activo.
+				if (pfd.revents & POLLIN) // Si el elemento es el propio servidor y tiene un evento pendiente (revents != 0) y ese evento es POLLIN (una nueva conexión entrante). EL & es un and bit a bit, porque el revent se maneja por bits para cada tipo de evento. Si el revent tiene el bit de POLLIN activado, significa que hay datos para leer o una nueva conexión entrante. Por eso se hace en & con el bit del POLLIN que nos asegura que, al menos el bit del POLLIN esta activo.
 				{
 					acceptClient(*serverSocket);
 					continue;
 				}
 			}
-			if (pfd.revents &
-				(POLLHUP | POLLERR |
-				 POLLNVAL)) // Si en el socket que estamos atendiendo hay un error (POLLERR), el socket se ha cerrado (POLLHUP) o el descriptor de archivo no es válido (POLLNVAL)...
+			if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) // Si en el socket que estamos atendiendo hay un error (POLLERR), el socket se ha cerrado (POLLHUP) o el descriptor de archivo no es válido (POLLNVAL)...
 			{
-				if (getServerSocketByFd(pfd.fd) !=
-					NULL) // Si el error ocurre en un socket de servidor, significa que hay un problema con el socket de escucha del servidor. Esto es crítico porque el servidor no podrá aceptar nuevas conexiones. En este caso, lanzamos una runtime_error para indicar que hay un error en el socket, esta llegaria al main y saldriamos del programa.
+				if (serverSocket != NULL) // Si el error ocurre en un socket de servidor, significa que hay un problema con el socket de escucha del servidor. Esto es crítico porque el servidor no podrá aceptar nuevas conexiones. En este caso, lanzamos una runtime_error para indicar que hay un error en el socket, esta llegaria al main y saldriamos del programa.
 					throw std::runtime_error("Error on listening socket");
-				disconnectClient(
-					pfd.fd); // Si el error ocurre en un socket de cliente, desconectamos al cliente y seguimos con el bucle. Esto es importante porque si no hacemos esto, el poll se quedaria bloqueado esperando a que ocurra un evento en ese socket que ya no es valido y el servidor se quedaria colgado.
+				disconnectClient(pfd.fd); // Si el error ocurre en un socket de cliente, desconectamos al cliente y seguimos con el bucle. Esto es importante porque si no hacemos esto, el poll se quedaria bloqueado esperando a que ocurra un evento en ese socket que ya no es valido y el servidor se quedaria colgado.
 				continue;
 			}
 			if (pfd.revents & POLLIN) //  El socket del cliente tiene datos disponibles para ser leídos mediante recv().
-				readFromClient(pfd.fd);
+			{
+				if (!readFromClient(pfd.fd))
+				{
+					disconnectClient(pfd.fd);
+					continue;
+				}
+			}
 			if (pfd.revents & POLLOUT) // El socket está listo para enviar datos al cliente mediante send().
-				writeToClient(pfd.fd);
+			{
+				if (!writeToClient(pfd.fd))
+					disconnectClient(pfd.fd);
+			}
 		}
+		cleanupDisconnectedClients(); // Limpiamos los clientes desconectados del vector de pollfd (marcados con -1) para no seguir escuchando en ellos. No se eliminan en el momento del problema para no tener problemas de indices en el recorrido del vector de pollfd. Se hace al final de la vuelta del bucle para que no afecte a la iteración actual.
 	}
 }
 
@@ -276,11 +279,12 @@ void Server::acceptClient(ServerSocket &serverSocket)
 }
 
 /**
- * Reads data from a client socket, parses the HTTP request, and prepares the response.
+ * Reads data from a client socket and processes the request if complete.
  * 
- * clientSocket: The socket connected to the client.
+ * @param clientSocket The socket connected to the client.
+ * @return false if the client has to be disconnected due to a client side disconnection or an error occurred, true otherwise.
  */
-void Server::readFromClient(int clientSocket)
+bool Server::readFromClient(int clientSocket)
 {
 	char buffer[4096];
 	Client &client = getClient(clientSocket);
@@ -290,23 +294,27 @@ void Server::readFromClient(int clientSocket)
 	std::cout << "recv() returned: " << bytes << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (bytes == 0)
 	{
-		std::cout << "Client disconnected." << std::endl;
-		disconnectClient(clientSocket);
-		return;
+		std::cout << "Client disconnected in good way." << std::endl;
+		return false;
 	}
-	if (bytes < 0) // Podria darse que sea un EAGAIN o EWOULDBLOCK, lo cual significa que no hay datos disponibles en este momento, pero el cliente sigue conectado. Como no podemos usar errno para chequear que es un EAGAIN o EWOULDBLOCK, daremos por hecho que un pollin activado significa que hay datos disponibles para leer, y si recv() devuelve -1, entonces es un error real y desconectamos al cliente. Lo mismo para pollout, si el pollout se activa y el send() devuelve -1, entonces es un error real y desconectamos al cliente. Lo normal seria comprobar si es un EAGAIN o EWOULDBLOCK con errno y si lo es , simplemente salir de la funcion y esperar a que el poll vuelva a activarse, ya que querria decir que por algun motivo los datos que estaban pendientes de leerse  ya no lo estan y por favor espera a la siguiente vuelta para ver si vuelven a estar.
+	else if (bytes < 0) // Podria darse que sea un EAGAIN o EWOULDBLOCK, lo cual significa que no hay datos disponibles en este momento, pero el cliente sigue conectado. Como no podemos usar errno para chequear que es un EAGAIN o EWOULDBLOCK, daremos por hecho que un pollin activado significa que hay datos disponibles para leer, y si recv() devuelve -1, entonces es un error real y desconectamos al cliente. Lo mismo para pollout, si el pollout se activa y el send() devuelve -1, entonces es un error real y desconectamos al cliente. Lo normal seria comprobar si es un EAGAIN o EWOULDBLOCK con errno y si lo es , simplemente salir de la funcion y esperar a que el poll vuelva a activarse, ya que querria decir que por algun motivo los datos que estaban pendientes de leerse  ya no lo estan y por favor espera a la siguiente vuelta para ver si vuelven a estar.
 	{
 		std::cerr << "Error receiving data from client." << std::endl;
-		disconnectClient(clientSocket);
-		return;
+		return false;
 	}
 	std::cout << "Request received: "; std::cout.write(buffer, bytes); std::cout << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
 	client.getRecvBuffer().append(buffer, bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 
 	processNextRequest(clientSocket);
+	return true;
 }
 
-void Server::writeToClient(int clientSocket)
+/**
+ * @brief Writes data to the client socket.
+ * @param clientSocket The socket of the client.
+ * @return false if the client has to be disconnected due to an error or a not keep-alive connection, true otherwise.
+ */
+bool Server::writeToClient(int clientSocket)
 {
 	Client &client = getClient(clientSocket);
 	std::string &sendBuffer = client.getSendBuffer();
@@ -319,8 +327,7 @@ void Server::writeToClient(int clientSocket)
 	if (bytesSent <= 0) // Si los bytes enviados son 0 es un error porque el pollout nos indica que el socket estaba listo para recibir datos porque tenia espacio pero cuando el send no envia nada (0) entonces se supone que es un error. En el -1 no podemos comprobar si es errno = EAGAIN por lo que entendemos que es un error al haber sido avisados de POLLOUT.
 	{
 		std::cerr << "Error sending data to client." << std::endl;
-		disconnectClient(clientSocket);
-		return;
+		return false;
 	}
 	client.addBytesSent(bytesSent);
 	std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client." << std::endl;
@@ -328,19 +335,18 @@ void Server::writeToClient(int clientSocket)
 	if (client.getBytesSent() < sendBuffer.size())
 	{
 		std::cout << "Response not fully sended yet." << std::endl;
-		return;
+		return true;
 	}
 	//Si la respuesta se ha enviado completamente.
 	if (client.isKeepAlive()) // Si se mantiene vivo... Si no hay otra petición completa, cambiamos el evento a POLLIN para esperar a que llegue la siguiente petición.
 	{
 		client.reset(); //Reseteamos los campos de cliente necesarios para poder procesar peticiones.
-		if (processNextRequest(clientSocket)) // Comprobamos si hay otra petición completa en el buffer de recepción del cliente y la procesamos inmediatamente.
-			return; // Si hemos procesado nueva petición, salimos para volver a entrar en el bucle de eventos (el poll loop) y no acaparar el hilo de ejecución. Pero sigue con POLLOUT porque tendremos que enviar la respuesta de esta nueva petición.
-		// Si no hay otra petición completa, salimos al bucle de enventos pero esta vez primero camos en POLLIN para esperar a que llegue la siguiente petición.
-		setPollEvent(clientSocket, POLLIN);
+		if (!processNextRequest(clientSocket)) // Comprobamos si hay otra petición completa en el buffer de recepción del cliente y la procesamos inmediatamente.
+			setPollEvent(clientSocket, POLLIN); // Si no hay otra petición completa, salimos al bucle de enventos pero esta vez primero camos en POLLIN para esperar a que llegue la siguiente petición.
+		return true; // Si hemos procesado nueva petición, salimos para volver a entrar en el bucle de eventos (el poll loop) y no acaparar el hilo de ejecución. Seguira como POLLOUT si se proceso bien la peticion y POLLIN si no habia otra peticion completa y se ha puesto a esperar a que llegue la siguiente.
 	}
 	else //Si no tiene que mantenerse vivo porque isKeepAlive() devuelve false, cerramos la conexión con el cliente.
-		disconnectClient(clientSocket);
+		return false;
 }
 
 /**
@@ -364,16 +370,30 @@ Client &Server::getClient(int clientSocket)
  */
 void Server::disconnectClient(int clientSocket)
 {
-	close(clientSocket);
+	close(clientSocket); // Cerramos el socket del cliente.
 	for (size_t i = 0; i < _pollFds.size(); ++i)
 	{
 		if (_pollFds[i].fd == clientSocket)
 		{
-			_pollFds.erase(_pollFds.begin() + i);
+			_pollFds[i].fd = -1; // Marcamos el fd como inválido para que el poll ignore este elemento en la siguiente vuelta. Si lo borramos aqui del vector con erase perderiamos los indices y podriamos saltarnos descriptores o incluso leer fuera de memoria.
+			// _pollFds.erase(_pollFds.begin() + i);
 			break;
 		}
 	}
-	_clients.erase(clientSocket);
+	_clients.erase(clientSocket); // Esto si que lo podemos borrar y, ya que lo damos por cerrado y no lo vamos a utilizar
+	std::cout << "Client disconnected." << std::endl;
+}
+
+/**
+ * Cleans up the poll file descriptors by removing those that are marked as disconnected (-1).
+ */
+void Server::cleanupDisconnectedClients()
+{
+	for (int i = static_cast<int>(_pollFds.size()) - 1; i >= 0; --i) // Recorremos el vector de pollfd desde el final hacia el principio para evitar problemas de indices al borrar elementos. Uso int en lugar de size_t para poder hacer i-- sin problemas de underflow cuando lleguemos al ultimo valor para salir del buble, por lo que hay que hacer static_cast porque el valor era un size_t.
+	{
+		if (_pollFds[i].fd == -1)
+			_pollFds.erase(_pollFds.begin() + i);
+	}
 }
 
 /**
@@ -831,8 +851,7 @@ HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
  * @param fd The file descriptor of the server socket.
  * @return A pointer to the ServerSocket object, or NULL if not found.
  */
-ServerSocket *Server::getServerSocketByFd(
-	int fd) //devolvemos un puntero porque asi podemos devolver NULL si no encontramos el socket, y si devolvieramos una referencia no podriamos devolver NULL.
+ServerSocket *Server::getServerSocketByFd(int fd) //devolvemos un puntero porque asi podemos devolver NULL si no encontramos el socket, y si devolvieramos una referencia no podriamos devolver NULL.
 {
 	for (size_t i = 0; i < _serverSockets.size(); ++i)
 	{
