@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/28 18:44:08 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/29 18:04:18 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -286,7 +286,7 @@ void Server::readFromClient(int clientSocket)
 	Client &client = getClient(clientSocket);
 
 	ssize_t bytes = recv(clientSocket, buffer, sizeof(buffer), 0); //Leemos lo que nos envia el cliente
-	// bytes > 0: data received, bytes == 0: client disconnected in a good way, bytes < 0: error
+	// bytes > 0: data received, bytes == 0: client disconnected in a good way, bytes < 0: error o eagain (no hay datos disponibles en este momento, pero el cliente sigue conectado).
 	std::cout << "recv() returned: " << bytes << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (bytes == 0)
 	{
@@ -294,7 +294,7 @@ void Server::readFromClient(int clientSocket)
 		disconnectClient(clientSocket);
 		return;
 	}
-	if (bytes < 0)
+	if (bytes < 0) // Podria darse que sea un EAGAIN o EWOULDBLOCK, lo cual significa que no hay datos disponibles en este momento, pero el cliente sigue conectado. Como no podemos usar errno para chequear que es un EAGAIN o EWOULDBLOCK, daremos por hecho que un pollin activado significa que hay datos disponibles para leer, y si recv() devuelve -1, entonces es un error real y desconectamos al cliente. Lo mismo para pollout, si el pollout se activa y el send() devuelve -1, entonces es un error real y desconectamos al cliente. Lo normal seria comprobar si es un EAGAIN o EWOULDBLOCK con errno y si lo es , simplemente salir de la funcion y esperar a que el poll vuelva a activarse, ya que querria decir que por algun motivo los datos que estaban pendientes de leerse  ya no lo estan y por favor espera a la siguiente vuelta para ver si vuelven a estar.
 	{
 		std::cerr << "Error receiving data from client." << std::endl;
 		disconnectClient(clientSocket);
@@ -316,7 +316,7 @@ void Server::writeToClient(int clientSocket)
 		sendBuffer.c_str() + client.getBytesSent(),
 		sendBuffer.size() - client.getBytesSent(),
 		0);
-	if (bytesSent < 0)
+	if (bytesSent <= 0) // Si los bytes enviados son 0 es un error porque el pollout nos indica que el socket estaba listo para recibir datos porque tenia espacio pero cuando el send no envia nada (0) entonces se supone que es un error. En el -1 no podemos comprobar si es errno = EAGAIN por lo que entendemos que es un error al haber sido avisados de POLLOUT.
 	{
 		std::cerr << "Error sending data to client." << std::endl;
 		disconnectClient(clientSocket);
