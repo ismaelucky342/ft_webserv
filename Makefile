@@ -19,20 +19,20 @@ CUT			=	\033[K
 
 #source files
 SRC_FILES	=	main.cpp \
+				StringUtils.cpp \
 				server/Server.cpp \
 				server/ServerSocket.cpp \
 				server/Client.cpp \
 				config/Config.cpp \
 				config/ConfigParser.cpp \
-				config/Tokenizer.cpp \
-				config/Token.cpp \
-				config/ServerParser.cpp \
-				config/Directives.cpp \
+				config/Listen.cpp \
+				config/Location.cpp \
 				http/HTTPException.cpp \
 				http/HTTPRequest.cpp \
 				http/HTTPRequestParser.cpp \
 				http/HTTPResponse.cpp \
 				http/HTTPStatus.cpp \
+				http/HTTPMethods.cpp \
 
 OBJ_FILES	=	$(SRC_FILES:.cpp=.o)
 

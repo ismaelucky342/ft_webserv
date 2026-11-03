@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   HttpStatus.hpp                                     :+:      :+:    :+:   */
+/*   HTTPStatus.hpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 11:17:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/14 12:52:59 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/23 13:41:33 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,14 +14,19 @@
 #define HTTP_STATUS_HPP
 
 #include <string>
+#include <stdexcept>
 
-enum HttpStatus
+enum HTTPStatus
 {
 	// 2xx everything is OK
 	OK = 200,
 	CREATED = 201,
 	NO_CONTENT = 204,
 
+	// 3xx redirection
+	MOVED_PERMANENTLY = 301,
+
+	// 4xx client errors
 	BAD_REQUEST = 400,
 	FORBIDDEN = 403,
 	NOT_FOUND = 404,
@@ -31,12 +36,14 @@ enum HttpStatus
 	CONTENT_TOO_LARGE = 413,
 	URI_TOO_LONG = 414,
 
+	// 5xx server errors
 	INTERNAL_SERVER_ERROR = 500,
 	NOT_IMPLEMENTED = 501,
 	SERVICE_UNAVAILABLE = 503,
 	HTTP_VERSION_NOT_SUPPORTED = 505
 };
 
-std::string getStatusMessage(HttpStatus status);
+std::string	getStatusMessage(HTTPStatus status);
+HTTPStatus	stringToHTTPStatus(const std::string &statusString);
 
 #endif

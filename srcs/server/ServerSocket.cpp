@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 11:48:51 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/28 17:32:16 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #include <sstream>	// std::ostringstream
 #include <cstdlib>	// exit()
 #include <netdb.h>	// getaddrinfo(), freeaddrinfo()
+#include <fcntl.h> // fcntl()
 
 #include "server/ServerSocket.hpp"
 #include <cstring>
@@ -21,10 +22,10 @@
 /**
  * Constructor for the ServerSocket class.
  *
- * @param config The configuration object containing server settings.
+ * @param listen The listen configuration object.
  */
-ServerSocket::ServerSocket(const Config &config)
-	: _config(config), _addrInfo(NULL), _serverSocketFd(-1)
+ServerSocket::ServerSocket(const Listen &listen)
+	: _listen(listen), _defaultConfig(NULL), _addrInfo(NULL), _serverSocketFd(-1)
 {
 	std::cout << BOLD_GREEN << "ServerSocket constructor called" << RESET << std::endl;
 }
@@ -35,7 +36,7 @@ ServerSocket::ServerSocket(const Config &config)
  * @param other The ServerSocket object to copy from.
  */
 ServerSocket::ServerSocket(const ServerSocket &other)
-	: _config(other._config), _addrInfo(other._addrInfo), _serverSocketFd(other._serverSocketFd)
+	: _listen(other._listen), _configs(other._configs), _defaultConfig(other._defaultConfig), _addrInfo(other._addrInfo), _serverSocketFd(other._serverSocketFd)
 {
 	std::cout << BOLD_GREEN << "ServerSocket copy constructor called" << RESET << std::endl;
 }
@@ -50,7 +51,9 @@ ServerSocket &ServerSocket::operator=(const ServerSocket &other)
 {
 	if (this != &other)
 	{
-		_config = other._config;
+		_listen = other._listen;
+		_configs = other._configs;
+		_defaultConfig = other._defaultConfig;
 		_addrInfo = other._addrInfo;
 		_serverSocketFd = other._serverSocketFd;
 	}
@@ -77,7 +80,7 @@ void ServerSocket::setupAddressInfo()
 		hints; // Estructura que contiene información sobre el tipo de socket que queremos crear. La usamos para indicarle al sistema operativo qué tipo de socket queremos crear y cómo queremos que se comporte.
 	std::ostringstream portStream;
 
-	portStream << _config.getPort();
+	portStream << _listen.getPort();
 	std::string port = portStream.str();
 
 	memset(&hints, 0, sizeof(hints));
@@ -87,7 +90,7 @@ void ServerSocket::setupAddressInfo()
 	hints.ai_socktype = SOCK_STREAM; // TCP socket
 	hints.ai_flags = AI_PASSIVE;	 // Socket will be used for binding
 
-	if (getaddrinfo(_config.getHost().c_str(), port.c_str(), &hints, &_addrInfo) !=
+	if (getaddrinfo(_listen.getInterface().c_str(), port.c_str(), &hints, &_addrInfo) !=
 		0) // (Parametros: host, port, hints(La receta de cómo queremos crear el socket), result (la estructura donde se guardará la info de la dirección. Mirar en http.md para entender la estructura addrinfo))
 	{
 		std::cerr << "Error getting address info" << std::endl;
@@ -113,13 +116,25 @@ void ServerSocket::freeAddressInfo()
 void ServerSocket::createSocket()
 {
 	_serverSocketFd = socket(_addrInfo->ai_family, _addrInfo->ai_socktype, _addrInfo->ai_protocol);
-	std::cout
-		<< "Socket descriptor: " << _serverSocketFd
-		<< std::
-			   endl; //IMP: Se podria borrar. solo era para debugueary entender bien el flujo de la creacion del socket.
+	std::cout << "Socket descriptor: " << _serverSocketFd << std::endl; //IMP: Se podria borrar. solo era para debugueary entender bien el flujo de la creacion del socket.
 	if (_serverSocketFd == -1)
 	{
 		std::cerr << "Error creating socket" << std::endl;
+		exit(EXIT_FAILURE);
+	}
+
+	int flags = fcntl(_serverSocketFd, F_GETFL, 0); // Obtenemos los flags actuales del socket para poder modificarlos y poner el socket en modo no bloqueante.
+	if (flags == -1)
+	{
+		std::cerr << "Error getting socket flags" << std::endl;
+		close(_serverSocketFd);
+		exit(EXIT_FAILURE);
+	}
+
+	if (fcntl(_serverSocketFd, F_SETFL, flags | O_NONBLOCK) == -1) // Ponemos el socket en modo no bloqueante para que las operaciones de lectura y escritura no bloqueen el flujo del programa. Esto es importante para poder manejar múltiples clientes simultáneamente sin que uno de ellos bloquee a los demás.
+	{
+		std::cerr << "Error setting socket non-blocking" << std::endl;
+		close(_serverSocketFd);
 		exit(EXIT_FAILURE);
 	}
 }
@@ -134,7 +149,7 @@ void ServerSocket::bindSocket()
 		std::cerr << "Error binding socket" << std::endl;
 		exit(EXIT_FAILURE);
 	}
-	std::cout << "Socket bound to port " << _config.getPort() << std::endl;
+	std::cout << "Socket bound to port " << _listen.getPort() << std::endl;
 }
 
 /**
@@ -152,6 +167,55 @@ void ServerSocket::listenSocket()
 }
 
 /**
+ * Gets the listen configuration object associated with the server socket.
+ *
+ * @return A constant reference to the listen configuration object.
+ */
+const Listen &ServerSocket::getListen() const
+{
+	return _listen;
+}
+
+/**
+ * Gets the map of hostnames to configuration objects associated with the server socket.
+ *
+ * @return A constant reference to the map of hostnames to configuration objects.
+ */
+const std::map<std::string, const Config *> &ServerSocket::getConfigs() const
+{
+	return _configs;
+}
+
+/**
+ * Gets the configuration object for a specific key associated with the server socket.
+ *
+ * @param key The key for which to retrieve the configuration.
+ * @return A pointer to the configuration object for the specified key, or NULL if not found.
+ */
+const Config *ServerSocket::getConfigFromKey(const std::string &key) const
+{
+	// IMP BORRAR al final, Es para debuguear
+	// std::cout << "Looking for host: [" << host << "]" << std::endl;
+	// for (std::map<std::string, const Config *>::const_iterator it = _configs.begin(); it != _configs.end(); ++it)
+	// 	std::cout << "Config key: [" << it->first << "]" << std::endl;
+
+	std::map<std::string, const Config *>::const_iterator it = _configs.find(key);
+	if (it != _configs.end())
+		return it->second;
+	return NULL;
+}
+
+/**
+ * Gets the default configuration object associated with the server socket.
+ *
+ * @return A pointer to the default configuration object, or NULL if not set.
+ */
+const Config *ServerSocket::getDefaultConfig() const
+{
+	return _defaultConfig;
+}
+
+/**
  * Gets the server socket descriptor.
  *
  * @return The server socket descriptor.
@@ -162,13 +226,47 @@ int ServerSocket::getserverSocketFd() const
 }
 
 /**
- * Gets the configuration object associated with the server socket.
+ * Sets the listen configuration object for the server socket.
  *
- * @return A reference to the configuration object.
+ * @param listen The listen configuration object to set.
  */
-const Config &ServerSocket::getConfig() const
+void ServerSocket::setListen(const Listen &listen)
 {
-	return _config;
+	_listen = listen;
+}
+
+/**
+ * Adds a configuration object for a specific host to the server socket.
+ *
+ * @param host The hostname for which to add the configuration.
+ * @param config The configuration object to add.
+ */
+void ServerSocket::addConfig(const Config &config)
+{
+	if (!config.getServerName().empty()) //chequeamos que el server_name no este vacio, porque si lo esta no tiene sentido añadirlo al map de configs.
+		_configs[config.getServerName()] = &config;
+	std::string interface = _listen.getInterface();
+	if (interface != "0.0.0.0")
+	{
+		if (!getConfigFromKey(interface)) // Solo añadimos la configuración si no existe ya una configuración para esa interfaz en el map. De esta manera le damos prioridad al primer bloque server que aparece en el archivo de configuración.
+		{
+			_configs[interface] = &config; // Añadimos la configuración al map con la direccion ip para evitar que se vaya por default si usamos la interfaz concreta.
+			if (interface == "127.0.0.1")
+				_configs["localhost"] = &config; // Como localhost es un alias de 127.0.0.1 si la interfaz es uno de los dos añadimos la configuración con el contrario para que funcione accediendo tanto con la ip coomo con el alias.
+			if (interface == "localhost")
+				_configs["127.0.0.1"] = &config; // Como localhost es un alias de 127.0.0.1 si la interfaz es uno de los dos añadimos la configuración con el contrario para que funcione accediendo tanto con la ip coomo con el alias.
+		}
+	}
+}
+
+/**
+ * Sets the default configuration object for the server socket.
+ *
+ * @param config The configuration object to set as the default.
+ */
+void ServerSocket::setDefaultConfig(const Config &config)
+{
+	_defaultConfig = &config;
 }
 
 /**
@@ -181,4 +279,20 @@ void ServerSocket::startServerSocket()
 	bindSocket();
 	freeAddressInfo(); // Free the address info after binding the socket to avoid memory leaks
 	listenSocket();
+	print(); // Print the server socket information after starting it (IMP: Esto es solo para debuguear y ver que se ha creado correctamente el socket de escucha del servidor. Se puede borrar despues.)
+}
+
+/**
+ * Prints the server socket information, including the port and interface it is listening on.
+ */
+void ServerSocket::print() const
+{
+	std::cout << BOLD_GREEN << "ServerSocket values:" << RESET << std::endl;
+	std::cout << "  Listening on port: " << _listen.getPort() << ", Interface: " << _listen.getInterface() << std::endl;
+	std::cout << "  Server socket descriptor: " << _serverSocketFd << std::endl;
+	std::cout << "  Configurations for hosts:" << std::endl;
+	for (std::map<std::string, const Config *>::const_iterator it = _configs.begin(); it != _configs.end(); ++it)
+		std::cout << "    Host: " << it->first << " -> " << it->second << std::endl;
+	std::cout << "  Default configuration: " << _defaultConfig << std::endl;
+	// std::cout << "  Default configuration: " << (_defaultConfig ? _defaultConfig->getServerName() : "None") << std::endl;
 }

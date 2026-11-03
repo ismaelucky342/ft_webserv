@@ -4,11 +4,13 @@
 #include <poll.h>
 #include <vector>
 #include <map>
+#include <string>
 #include "config/Config.hpp" //IMP: revisar si sobra algun include.
 #include "http/HTTPResponse.hpp"
 #include "http/HTTPRequest.hpp"
 #include "http/HTTPRequestParser.hpp"
-#include "http/HttpStatus.hpp"
+#include "http/HTTPStatus.hpp"
+#include "http/HTTPException.hpp"
 #include "server/Client.hpp"
 #include "server/ServerSocket.hpp"
 class Server
@@ -22,20 +24,35 @@ private:
 	void initPoll();
 	void runLoop();
 	void setPollEvent(int clientSocket, short events);
+	void printPollFds() const; // IMP: Para depuracion y entender mejor. Muestra por pantalla los fds que estamos escuchando y sus eventos.
 	//Client handling
 	void acceptClient(ServerSocket &serverSocket);
-	void readFromClient(int clientSocket);
-	void writeToClient(int clientSocket);
+	bool readFromClient(int clientSocket);
+	bool writeToClient(int clientSocket);
 	Client &getClient(int clientSocket);
 	void disconnectClient(int clientSocket);
+	void cleanupDisconnectedClients();
+	void updateClientKeepAlive(Client &client);
 	//Request handling
-	HTTPResponse handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket);
+	bool processNextRequest(int clientSocket);
+	bool processChunkedBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body);
+	bool processContentLengthBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body);
+	const Config *isValidConfig(const Config *config, int clientSocket);
+	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
+	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config);
+	bool isMethodAllowed(const HTTPRequest &request, const Location *location);
 	//Response handling
-	HTTPResponse createResponse(HttpStatus statusCode, const std::string &contentType,
-								const std::string &body);
-	HTTPResponse createErrorResponse(HttpStatus statusCode, const ServerSocket &serverSocket);
+	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
+	HTTPResponse createErrorResponse(const HTTPException &e, const Config *config);
+	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
+	HTTPResponse createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget);
+	HTTPResponse createAutoIndexResponse(const std::string &requestPath);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
+	bool		 sameInterface(const std::string &interface1, const std::string &interface2) const;
+	ServerSocket *findServerSocket(const Listen &listen);
+	// Other private methods for server functionality can be added here
+	std::string getContentType(const std::string &path) const;
 
 public:
 	Server(const std::vector<Config> &configs);

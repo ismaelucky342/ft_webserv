@@ -3,227 +3,519 @@
 /*                                                        :::      ::::::::   */
 /*   ConfigParser.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/03 02:48:06 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/03 12:57:38 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "colors.hpp"
 #include "config/ConfigParser.hpp"
-#include <cstdlib>
+#include "config/Listen.hpp"
+#include "config/Location.hpp"
+#include "http/HTTPMethods.hpp"
 #include <fstream>
 #include <sstream>
-#include <stdexcept>
+#include <cstdlib>
+#include <limits>
+#include "StringUtils.hpp"
 
 /**
- * Construye un parser de configuración vacío.
+ * Default constructor for the ConfigParser class. Initializes default value for
+ * pos
+ * 
+ * pos: Default position index (0).
  */
-ConfigParser::ConfigParser()
+ConfigParser::ConfigParser() : _pos(0)
 {
-	std::cout << BOLD_GREEN << "ConfigParser default constructor called"
-			  << RESET << std::endl;
+	std::cout << BOLD_GREEN << "ConfigParser default constructor called" << RESET << std::endl;
 }
 
 /**
- * Construye una copia de otro parser de configuración.
+ * Copy constructor for the ConfigParser class.
+ * 
+ * other: The ConfigParser object to copy from.
  */
-ConfigParser::ConfigParser(const ConfigParser &other)
-	: _fileContent(other._fileContent), _tokenizer(other._tokenizer),
-	  _tokens(other._tokens), _servers(other._servers)
+ConfigParser::ConfigParser(const ConfigParser &other) : _tokens(other._tokens), _pos(other._pos)
 {
-	std::cout << BOLD_GREEN << "ConfigParser copy constructor called"
-			  << RESET << std::endl;
+	std::cout << BOLD_GREEN << "ConfigParser copy constructor called" << RESET << std::endl;
 }
 
 /**
- * Sustituye el estado actual por el de otro parser de configuración.
+ * Assignment operator for the ConfigParser class.
+ * 
+ * other: The ConfigParser object to assign from.
+ * @return A reference to the assigned ConfigParser object.
  */
 ConfigParser &ConfigParser::operator=(const ConfigParser &other)
 {
 	if (this != &other)
 	{
-		_fileContent = other._fileContent;
-		_tokenizer = other._tokenizer;
 		_tokens = other._tokens;
-		_servers = other._servers;
+		_pos = other._pos;
 	}
-	std::cout << BOLD_GREEN << "ConfigParser assignment operator called"
-			  << RESET << std::endl;
+	std::cout << BOLD_GREEN << "ConfigParser assignment operator called" << RESET << std::endl;
 	return *this;
 }
 
 /**
- * Destruye el parser y sus estructuras internas.
+ * Destructor for the ConfigParser class.
  */
 ConfigParser::~ConfigParser()
 {
-	std::cout << BOLD_RED << "ConfigParser destructor called"
-			  << RESET << std::endl;
+	std::cout << BOLD_RED << "ConfigParser destructor called" << RESET << std::endl;
 }
 
 /**
- * Lee el contenido completo de un fichero y lo devuelve como una cadena.
- */
-std::string ConfigParser::readFile(const std::string &filename) const
-{
-	std::ifstream configFile(filename.c_str());
-
-	if (!configFile.is_open())
-		throw std::runtime_error("Error opening config file: " + filename);
-	std::stringstream buffer;
-	buffer << configFile.rdbuf();
-	return buffer.str();
-}
-
-/**
- * Construye y devuelve una configuración por cada bloque server.
+ * Parses the configuration file and returns a Config object.
+ * 
+ * filename: The path to the configuration file.
+ * @return A vector of Config objects initialized with the parsed values.
  */
 std::vector<Config> ConfigParser::parse(const std::string &filename)
 {
-	_fileContent = readFile(filename);
-	_tokens.clear();
-	_tokenizer.tokenize(_fileContent);
-	_tokens = _tokenizer.getTokens();
-	_servers.clear();
-	buildServers();
-	return buildConfigs();
-}
-
-/**
- * Devuelve la lista de tokens generada durante el parseo.
- * debug
- */
-const std::vector<Token> &ConfigParser::getTokens() const
-{
-	return _tokens;
-}
-
-/**
- * Devuelve la lista de servidores construida durante el parseo.
- * debug
- */
-const std::vector<ServerParser> &ConfigParser::getServers() const
-{
-	return _servers;
-}
-
-/**
- * Recorre los tokens y construye un servidor por cada token server.
- */
-void ConfigParser::buildServers()
-{
-	std::vector<Token>::const_iterator iterator = _tokens.begin();
-
-	while (iterator != _tokens.end())
-	{
-		if (iterator->getType() == 2 &&
-			iterator->getValue() == "server")
-		{
-			_servers.push_back(ServerParser(_tokens, iterator));
-			while (iterator != _tokens.end() &&
-				!(iterator->getType() == 1 &&
-				  iterator->getValue() == "}"))
-				++iterator;
-		}
-		if (iterator != _tokens.end())
-			++iterator;
-	}
-}
-
-/**
- * Construye un Config por cada servidor y aplica todas sus directivas.
- */
-std::vector<Config> ConfigParser::buildConfigs() const
-{
 	std::vector<Config> configs;
 
-	for (size_t i = 0; i < _servers.size(); ++i)
+	_tokens
+		.clear(); // Hacemos Clear pare eliminar cualquier token previo en caso de que se llame a parse varias veces con diferentes archivos de configuración.
+	_pos = 0;
+
+	std::ifstream configFile(filename.c_str());
+	if (!configFile.is_open())
+		throw std::runtime_error("Error opening config file: " + filename);
+
+	std::stringstream buffer;
+	buffer << configFile.rdbuf(); //Leemos todo el contenido del archivo en un stringstream
+	std::string fileContent = buffer.str();
+	std::string normalizedContent;
+	//En este bucle for se normaliza el contenido de filecontent (se agregan espacios alrededor de los tokens especiales)
+	//  "{"  "}" y ";" para que puedan ser tokenizados correctamente con el stringstream y el operador >>)
+	// Se normalizan porque podria aparecer tal que asi: "server{ port 8080;}" y eso no se tokenizaria correctamente, ya que el operador >> separa por espacios."
+	// Al final lo que queremos es que esten tal que asi: "server { port 8080 ; }"" para que se tokenice correctamente.
+	for (size_t i = 0; i < fileContent.size(); ++i)
 	{
-		Config config;
-		const std::vector<Directives> &directives =
-			_servers[i].getDirectives();
-
-		for (size_t j = 0; j < directives.size(); ++j)
+		if (fileContent[i] == '{' || fileContent[i] == '}' ||
+			fileContent[i] == ';') // Remove carriage return characters
 		{
-			const std::string &name = directives[j].getDirective();
-			const std::vector<std::string> &arguments =
-				directives[j].getArguments();
-
-			if (name == "listen")
-			{
-				if (arguments.size() != 1)
-					throw std::runtime_error("Error: listen requires one argument");
-				std::string listen = arguments[0];
-				size_t colon = listen.find(":");
-				if (colon != std::string::npos)
-				{
-					if (colon == 0 || colon == listen.size() - 1)
-						throw std::runtime_error("Error: invalid listen argument: " + listen);
-					config.setHost(listen.substr(0, colon));
-					listen = listen.substr(colon + 1);
-				}
-				long port = strToLong(listen);
-				if (port < 1 || port > 65535)
-					throw std::runtime_error("Error: invalid port number: " + listen);
-				config.setPort(static_cast<int>(port));
-			}
-			else if (name == "root")
-			{
-				if (arguments.size() != 1)
-					throw std::runtime_error("Error: root requires one argument");
-				config.setRoot(arguments[0]);
-			}
-			else if (name == "index")
-			{
-				if (arguments.size() != 1)
-					throw std::runtime_error("Error: index requires one argument");
-				config.setIndex(arguments[0]);
-			}
-			else if (name == "error_page")
-			{
-				if (arguments.size() != 2)
-					throw std::runtime_error("Error: error_page requires two arguments");
-				long errorCode = strToLong(arguments[0]);
-				if (errorCode < 100 || errorCode > 599)
-					throw std::runtime_error("Error: invalid error code: " + arguments[0]);
-				config.setErrorPage(static_cast<int>(errorCode),
-					arguments[1]);
-			}
-			else if (name == "client_max_body_size")
-			{
-				if (arguments.size() != 1)
-					throw std::runtime_error("Error: client_max_body_size requires one argument");
-				std::string value = arguments[0];
-				char unit = value[value.size() - 1];
-				if (unit == 'K' || unit == 'k' ||
-					unit == 'M' || unit == 'm')
-					value.erase(value.size() - 1);
-				long maxBodySize = strToLong(value);
-				if (unit == 'K' || unit == 'k')
-					maxBodySize *= 1024L;
-				else if (unit == 'M' || unit == 'm')
-					maxBodySize *= 1024L * 1024L;
-				config.setClientMaxBodySize(maxBodySize);
-			}
-			else
-				throw std::runtime_error("Error: unsupported directive: " + name);
+			normalizedContent += " ";
+			normalizedContent += fileContent[i];
+			normalizedContent += " ";
 		}
+		else
+			normalizedContent += fileContent[i];
+	}
+	//Una vez los tenemos normalizados, los tokenizamos y los guardamos en el vector _tokens. Quedaría tal que asi: server, {, port, 8080, ;, },
+	std::stringstream ss(normalizedContent);
+	std::string token;
+	while (
+		ss >>
+		token) //Vamos leyento token a token con el operador >> y los vamos guardando en el vector _tokens con push_back.
+		_tokens.push_back(token);
+	while (
+		_pos <
+		_tokens
+			.size()) //Recorremos el vector de tokens hasta que lleguemos al final y parsearemos cada bloque de configuracion del server.
+	{
+		Config config = parseServer();
 		configs.push_back(config);
 	}
 	return configs;
 }
 
 /**
- * Convierte una cadena numérica en un valor long.
+ * Returns the current token.
+ * 
+ * @return A reference to the current token.
  */
-long ConfigParser::strToLong(const std::string &str) const
+const std::string &ConfigParser::current() const
 {
-	char *end;
-	long value = std::strtol(str.c_str(), &end, 10);
+	if (_pos < _tokens.size())
+		return _tokens[_pos];
+	throw std::out_of_range("Current position is out of range");
+}
 
-	if (*end != '\0')
-		throw std::runtime_error("Invalid number: " + str);
-	return value;
+/**
+ * Moves to the next token.
+ * 
+ * @return A reference to the next token.
+ */
+void ConfigParser::next()
+{
+	if (_pos >= _tokens.size())
+		throw std::out_of_range("Next position is out of range");
+	++_pos;
+}
+
+/**
+ * Expects a specific token and moves to the next token.
+ * If the expected token is not found, throws a runtime error.
+ * 
+ * token: The token to expect.
+ */
+void ConfigParser::expect(const std::string &token)
+{
+	if (current() != token)
+		throw std::runtime_error("Expected token: " + token + ", but found: " + current());
+	next();
+}
+
+/**
+ * Parses the server block.
+ * 
+ * config: The Config object to initialize.
+ */
+Config ConfigParser::parseServer()
+{
+	Config config;
+	expect("server"); // Si el primer token no es "server", lanzamos un error porque sabemos que el archivo de conf esta mal formado. Si lo es, avanza al siguiente.
+	expect("{"); //Lo mismo qon la llave de apertura del bloque de configuracion del server. De esta manera vamos comprobando que este bien formado el archivo de configuracion.
+	while (current() != "}") // Mientras no encontremos la llave de cierre del bloque de configuracion del server, seguimos parseando los tokens.
+	{
+		if (current() == "listen") // Si el token es listen parseamos el puerto y la interfaz si se indica y lo guardamos en el objeto config.
+			parseListen(config);
+		else if (current() == "server_name")
+			parseServerName(config);
+		else if (current() == "root")
+			config.setRoot(parseRoot());
+		else if (current() == "index")
+			config.setIndex(parseIndex());
+		else if (current() == "error_page")
+			parseErrorPage(config);
+		else if (current() == "client_max_body_size")
+			parseClientMaxBodySize(config);
+		else if (current() == "location")
+			parseLocation(config);
+		else
+			parseOther();
+			// throw std::runtime_error("Unexpected token in server block: " + current());
+	}
+	expect("}");
+	return config; // Una vez hemos parseado todo el bloque de configuracion del server, devolvemos el objeto config con los valores parseados.
+}
+
+/**
+ * Parses the listen directive.
+ * 
+ * config: The Config object to initialize.
+ */
+void ConfigParser::parseListen(Config &config)
+{
+	std::string interface = "0.0.0.0";
+	expect(
+		"listen"); // Si el token actual es "listen", avanzamos al siguiente token que debería ser el número de puerto.
+	std::string listenStr =
+		current(); // Obtenemos el valor del token actual, que debería ser el número de puerto o la interfaz:puerto (ej: 127.0.0.1:8080)
+	size_t colonPos = listenStr.find(
+		":"); // Buscamos si hay un ':' en el token actual, lo que indicaría que se especificó una interfaz además del puerto.
+	if (colonPos !=
+		std::string::
+			npos) // Si colonPos no es npos, significa que se encontró un ':' en el token actual, lo que indica que se especificó una interfaz además del puerto.
+	{
+		interface = listenStr.substr(0, colonPos); // Obtenemos la parte antes del ':' como interfaz
+		if (interface.empty())
+			throw std::runtime_error("Missing interface");
+		listenStr = listenStr.substr(colonPos +
+									 1); // Actualizamos listenStr para que contenga solo el puerto
+		if (listenStr.empty())
+			throw std::runtime_error("Missing port");
+	}
+	long port = StringUtils::parseLong(listenStr);
+	if (port < 1 || port > 65535) // Comprobamos que el puerto esté en el rango válido (1-65535).
+		throw std::runtime_error("Invalid port number: " + current());
+	Listen listen(static_cast<int>(port), interface);
+	config.addListen(listen); // Agregamos el objeto Listen al objeto Config.
+		next();						 // Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(
+		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de puerto. SI no lo es lanzamos un error porque no estaria bien formado.
+}
+
+/**
+ * Parses the server_name directive.
+ * 
+ * config: The Config object to initialize.
+ */
+void ConfigParser::parseServerName(Config &config)
+{
+	expect("server_name"); // Si el token actual es "server_name", avanzamos al
+	std::string serverName = current(); // Obtenemos el valor del token actual.
+	config.setServerName(serverName);   // Establecemos el nombre del servidor en el objeto config.
+	next();							  // Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(
+		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de nombre de servidor. SI no lo es lanzamos un error porque no estaria bien formado.
+}
+
+/**
+ * Parses the root directive.
+ * 
+ * config: The Config object to initialize.
+ */
+const std::string ConfigParser::parseRoot() // Devuelve una referencia a cadena porque de esta forma lo podemos reutilizar también para la root de los location.
+{
+	expect("root"); // Si el token actual es "root", avanzamos al siguiente token que debería ser la ruta raíz.
+	std::string root = current(); // Obtenemos el valor del token actual.
+	const std::string rootRef = root; // Creamos una referencia constante a la cadena.
+	next();	// Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de raíz. SI no lo es lanzamos un error porque no estaria bien formado.
+	return rootRef;
+}
+
+/**
+ * Parses the index directive.
+ * 
+ * config: The Config object to initialize.
+ */
+const std::string ConfigParser::parseIndex() // Devuelve una referencia a cadena porque de esta forma lo podemos reutilizar también para la index de los location.
+{
+	expect("index"); // Si el token actual es "index", avanzamos al siguiente token que debería ser el nombre del archivo index.
+	std::string index = current(); // Obtenemos el valor del token actual.
+	const std::string indexRef = index; // Creamos una referencia constante a la cadena.
+	next(); // Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de index. SI no lo es lanzamos un error porque no estaria bien formado.
+	return indexRef;
+}
+
+void ConfigParser::parseErrorPage(Config &config)
+{
+	expect(
+		"error_page"); // Si el token actual es "error_page", avanzamos al siguiente token que debería ser el código de error.
+	std::string errorCodeStr = current(); // Obtenemos el valor del token actual.
+	long errorCode = StringUtils::parseLong(errorCodeStr);
+	if (errorCode < 100 ||
+		errorCode > 599) // Comprobamos que el código de error esté en el rango válido (100-599).
+		throw std::runtime_error("Invalid error code: " + errorCodeStr);
+	next(); // Avanzamos al siguiente token, que debería ser la ruta de la página de error.
+	std::string errorPagePath = current(); // Obtenemos el valor del token actual
+	config.addErrorPage(
+		static_cast<int>(errorCode),
+		errorPagePath); // Establecemos la ruta de la página de error en el objeto config.
+	next();				// Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(
+		";"); // Comprobamos que el siguiente token sea un punto y coma, que indica el final de la directiva de página de error. SI no lo es lanzamos un error porque no estaria bien formado.
+}
+
+/**
+ * Validates and converts a string representing a maximum body size to a size_t.
+ * 
+ * str: The string to validate and convert.
+ * result: The resulting size_t value.
+ * 
+ * Returns true if the conversion is successful, false otherwise.
+ */	
+bool ConfigParser::validateMaxBodySize(const std::string &str, size_t &result)
+{
+	if (str.empty())
+		return false;
+
+	size_t value = 0;
+	size_t multiplier = 1;
+	size_t maxValue = std::numeric_limits<size_t>::max();
+	size_t i = 0;
+
+	// LEo la parte de los numeros hasta que encuentre un caracter que no sea un digito o llegue al final de la cadena.
+	while (i < str.size() && std::isdigit(static_cast<unsigned char>(str[i])))
+	{
+		size_t digit = str[i] - '0';
+		if (value > (maxValue - digit) / 10) // value × 10 + digit <= maxValue ---> despejando value:  value > (maxValue - digit) / 10. Para comprobar que no se desborde el valor de size_t al multiplicar por 10 y sumar el digito.
+			return false;
+		value = value * 10 + digit;
+		++i;
+	}
+	// Al menos un dígito debe estar presente para que sea un número válido.
+	if (i == 0)
+		return false;
+	// Lee la parte de la unidad (k, m, g) si está presente y establece el multiplicador correspondiente.
+	if (i < str.size())
+	{
+		if (i != str.size() - 1) // SI hay más de un caracter después de los dígitos, es inválido (solo se permite un caracter de unidad).
+			return false;
+		if (str[i] == 'k' || str[i] == 'K')
+			multiplier = 1024L;
+		else if (str[i] == 'm' || str[i] == 'M')
+			multiplier = 1024L * 1024L;
+		else if (str[i] == 'g' || str[i] == 'G')
+			multiplier = 1024L * 1024L * 1024L;
+		else
+			return false;
+	}
+	// Chequeo el desbordamiento al multiplicar por el multiplicador.
+	if (value > maxValue / multiplier)
+		return false;
+	result = value * multiplier;
+	return true;
+}
+
+
+void ConfigParser::parseClientMaxBodySize(Config &config)
+{
+	expect("client_max_body_size"); // Si el token actual es "client_max_body_size", avanzamos al siguiente token que debería ser el tamaño máximo del cuerpo de la solicitud.
+	std::string sizeStr = current(); // Obtenemos el valor del token actual.
+	size_t maxBodySize;
+	if (!validateMaxBodySize(sizeStr, maxBodySize)) // Validamos y convertimos el tamaño máximo del cuerpo de la solicitud a size_t.
+		throw std::runtime_error("Invalid client_max_body_size value: " + sizeStr);
+	config.setClientMaxBodySize(maxBodySize); // Establecemos el tamaño máximo del cuerpo de la solicitud en el objeto config.
+	next(); // Avanzamos al siguiente token, que debería ser el punto y coma.
+	expect(";");
+}
+
+/**
+ * Parses any other directive that is not explicitly handled. it just take every toket until it finds the end of the block (}) and prints it to the console.
+ * ¡Esta función es solo para probar mientras no parseo las otras directivas. quitarla luego de la clase!
+ * config: The Config object to initialize.
+ */
+void ConfigParser::parseOther()
+{
+	std::cout << BOLD_CYAN << "Parsing other directive: " << current() << RESET << std::endl;
+	while (current() != "}" && current() != ";") // Mientras no encontremos la llave de cierre del bloque de configuración del server o un punto y coma, seguimos parseando los tokens.
+	{
+		std::cout << BOLD_CYAN << "Token: " << current() << RESET << std::endl;
+		next();
+	}
+	next(); // Avanzamos al siguiente token, que debería ser la llave de cierre del bloque de configuración del server o un punto y coma.
+	// expect("}"); // Comprobamos que el siguiente token sea una llave de cierre, que indica el final del bloque. SI no lo es lanzamos un error porque no estaria bien formado.
+}
+
+/**
+ * Parses the location block.
+ * 
+ * config: The Config object to initialize.
+ */
+void ConfigParser::parseLocation(Config &config) //IMP BORRAR: Hay que ponerlo en parseServer y quizas devolver el location en lugar de meterlo aqui.
+{
+	expect("location"); // Si el token actual es "location", avanzamos al siguiente token que debería ser la ruta de la ubicación.
+	std::string locationPath = current(); // Obtenemos el valor del token actual.
+	Location location(locationPath); // Creamos un objeto Location con la ruta obtenida.
+	next(); // Avanzamos al siguiente token, que debería ser la llave de apertura del bloque de ubicación.
+	expect("{"); // Comprobamos que el siguiente token sea una llave de apertura, que indica el inicio del bloque de location. SI no lo es lanzamos un error porque no estaria bien formado
+	while (current() != "}") // Mientras no encontremos la llave de cierre del bloque de ubicación, seguimos parseando los tokens.
+	{
+		if (current() == "root")
+		{
+			std::cout << BOLD_YELLOW "Parsing root directive in location: " << locationPath << RESET << std::endl;
+			location.setRoot(parseRoot());
+		}
+		else if (current() == "index")
+		{
+			std::cout << BOLD_YELLOW "Parsing index directive in location: " << locationPath << RESET << std::endl;
+			location.setIndex(parseIndex());
+		}
+		else if (current() == "autoindex")
+		{
+			std::cout << BOLD_YELLOW "Parsing autoindex directive in location: " << locationPath << RESET << std::endl;
+			parseAutoindex(location);
+		}
+		else if (current() == "methods")
+		{
+			std::cout << BOLD_YELLOW "Parsing methods directive in location: " << locationPath << RESET << std::endl;
+			parseAllowMethods(location);
+		}
+		else if (current() == "return")
+		{
+			std::cout << BOLD_YELLOW "Parsing return directive in location: " << locationPath << RESET << std::endl;
+			parseRedirect(location);
+		}
+		else if (current() == "upload_store")
+		{
+			std::cout << BOLD_YELLOW "Parsing upload_store directive in location: " << locationPath << RESET << std::endl;
+			parseUploadStore(location);
+		}
+		else if (current() == "cgi")
+		{
+			std::cout << BOLD_YELLOW "Parsing cgi directive in location: " << locationPath << RESET << std::endl;
+			parseCgi(location);
+		}
+		else
+			throw std::runtime_error("Unexpected token in location block: " + current());
+	}
+	expect("}"); // Comprobamos que el siguiente token sea una llave de cierre, que indica el final del bloque de location. SI no lo es lanzamos un error porque no estaria bien formado.
+	config.addLocation(location);
+}
+
+/**
+ * Parses the autoindex directive.
+ * The autoindex directive specifies whether directory listing is enabled or disabled for a directory
+ * in case there is no index file.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseAutoindex(Location &location)
+{
+	expect("autoindex");
+	std::string autoindexValue = current();
+	if (autoindexValue == "on")
+		location.setAutoindex(true);
+	else if (autoindexValue == "off")
+		location.setAutoindex(false);
+	else
+		throw std::runtime_error("Invalid autoindex value: " + autoindexValue);
+	next();
+	expect(";");
+}
+
+/**
+ * Parses the allowed methods directive It adds the allowed methods to the set of allowed methods.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseAllowMethods(Location &location)
+{
+	expect("methods");
+	while (current() != ";")
+	{
+		std::string methodStr = current();
+		HTTPMethod method = stringToHTTPMethod(methodStr);
+		location.addAllowedMethod(method);
+		std::cout << BOLD_YELLOW "METODO INTRODUCIDO: " << methodStr << RESET << std::endl; // BORRAR: para debug
+		next();
+	}
+	std::cout << BOLD_YELLOW "FIN DE METODOS" << RESET << std::endl; // BORRAR: para debug
+	expect(";");
+}
+
+/**
+ * Parses the redirect directive.
+ * The redirect directive specifies a redirect to be sent to the client.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseRedirect(Location &location)
+{
+	expect("return");
+	HTTPStatus redirectCode = stringToHTTPStatus(current());
+	next();
+	location.setRedirect(redirectCode, current());
+	next();
+	expect(";");
+
+}
+
+/**
+ * Parses the upload_store directive.
+ * The upload_store directive specifies the directory where uploaded files will be stored.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseUploadStore(Location &location)
+{
+	expect("upload_store");
+	location.setUploadStore(current());
+	next();
+	expect(";");
+}
+
+/**
+ * Parses the CGI directive.
+ * The CGI directive specifies the extension and executable for CGI scripts.
+ *
+ * location: The Location object to configure.
+ */
+void ConfigParser::parseCgi(Location &location)
+{
+	expect("cgi");
+	std::string cgiExtension = current();
+	next();
+	std::string cgiExecutable = current();
+	location.setCgi(cgiExtension, cgiExecutable);
+	next();
+	expect(";");
 }

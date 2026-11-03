@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:15:20 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/24 11:48:40 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/24 16:20:13 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,7 +18,9 @@
 class ServerSocket
 {
 private:
-	Config _config;
+	Listen _listen;
+	std::map<std::string, const Config *> _configs;
+	const Config *_defaultConfig;
 	struct addrinfo *_addrInfo;
 	int _serverSocketFd;
 
@@ -30,16 +32,25 @@ private:
 	void listenSocket();
 
 public:
-	ServerSocket(const Config &config);
+	ServerSocket(const Listen &listen);
 	ServerSocket(const ServerSocket &other);
 	ServerSocket &operator=(const ServerSocket &other);
 	~ServerSocket();
 
 	//getters
+	const Listen &getListen() const;
+	const std::map<std::string, const Config *> &getConfigs() const;
+	const Config *getConfigFromKey(const std::string &key) const;
+	const Config *getDefaultConfig() const;
 	int getserverSocketFd() const;
-	const Config &getConfig() const;
+
+	//Setters
+	void setListen(const Listen &listen);
+	void addConfig(const Config &config);
+	void setDefaultConfig(const Config &config);
 
 	void startServerSocket();
+	void print() const;
 };
 
 #endif // SERVER_SOCKET_HPP

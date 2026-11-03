@@ -1,13 +1,30 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   Server.cpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
+/*   Updated: 2026/10/30 15:32:37 by mvidal-h         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include <unistd.h> // close()
+#include <fcntl.h> // fcntl()
 #include <iostream>
 #include <fstream>		// std::ifstream
 #include <sstream>		// std::ostringstream
 #include <sys/socket.h> // socket(), bind(), listen(), accept(), send(), recv()
 #include <netinet/in.h> // sockaddr_in, htons(), ntohs(), INADDR_ANY
+#include <sys/stat.h> // stat() Para obtener info de un archivo (tipo, tamaño, permisos, etc.)
 
 #include "server/Server.hpp"
 #include <arpa/inet.h> // inet_ntoa(), inet_ntop(), inet_pton(), inet_addr()
 #include "http/HTTPException.hpp"
+#include "server/error.hpp"
+#include "colors.hpp"
+#include "StringUtils.hpp"
 
 /**
  * Constructor for the Server class.
@@ -17,8 +34,35 @@
 Server::Server(const std::vector<Config> &configs)
 {
 	for (size_t i = 0; i < configs.size(); ++i)
-		_serverSockets.push_back(ServerSocket(configs[i]));
-	std::cout << BOLD_GREEN << "Server constructor called" << RESET << std::endl;
+	{
+		const Config &config = configs[i];
+		const std::vector<Listen> &confListens = config.getListens();
+
+		for (size_t j = 0; j < confListens.size(); ++j)
+		{
+			const Listen &listen = confListens[j];
+			ServerSocket *serverSocket = findServerSocket(listen);
+			if (serverSocket == NULL) // No existe ningún ServerSocket compatible, así que creamos uno nuevo.
+			{
+				_serverSockets.push_back(ServerSocket(listen));
+				serverSocket = &_serverSockets.back();
+				serverSocket->setDefaultConfig(config); // El primero es el default provisional.
+			}
+			else
+			{
+				// Si el nuevo listen es 0.0.0.0 y el existente
+				// era una interfaz concreta, el wildcard tiene prioridad.
+				if (listen.getInterface() == "0.0.0.0" &&
+					serverSocket->getListen().getInterface() != "0.0.0.0")
+				{
+					serverSocket->setListen(listen); // Actualizamos el listen del ServerSocket existente al nuevo listen con la interfaz "0.0.0.0"
+					serverSocket->setDefaultConfig(config); // el config por defecto ahora es el del listen con la interfaz "0.0.0.0"
+				}
+			}
+			serverSocket->addConfig(config); // Añadimos la configuración al ServerSocket.
+
+		}
+	}
 }
 
 /**
@@ -67,7 +111,7 @@ void Server::start()
 {
 	for (size_t i = 0; i < _serverSockets.size(); ++i)
 		_serverSockets[i]
-			.startServerSocket(); //IMP: Creo que aqui ira un buclw cuando tengamos multiples servidores, para que inicie todos los sockets de escucha de todos los servidores.
+			.startServerSocket();
 
 	initPoll();
 	runLoop();
@@ -104,49 +148,55 @@ void Server::runLoop()
 {
 	while (true)
 	{
-		int pollCount = poll(
-			_pollFds.data(), _pollFds.size(),
-			-1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito)
+		std::cout << "---- BEFORE POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
+		size_t fdsSize = _pollFds.size(); // Guardo el tamaño del vector de pollfd antes de entrar en el bucle, porque si aceptamos un nuevo cliente, el tamaño del vector aumentará y así evitamos recorrer los nuevos elementos añadidos en esta vuelta del bucle, que no tienen eventos pendientes y que podrían causar problemas.
+		int pollCount = poll(_pollFds.data(), fdsSize, -1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito)
+		std::cout << "---- AFTER POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		std::cout << "poll() returned " << pollCount << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
+
 		if (pollCount == -1)
 		{
 			std::cerr << "Error in poll()" << std::endl;
 			continue;
 		}
-		for (
-			size_t i = 0; i < _pollFds.size();
-			++i) //Cuando ocurre un evento en cualquiera de los elementos en los que esta escuchando el poll, se sale y tenemos que recorrerlos con el bucle pasando por todos (incluso los que no tienen eventos activos en su revent.)
+		for (size_t i = 0; i < fdsSize; ++i) //Cuando ocurre un evento en cualquiera de los elementos en los que esta escuchando el poll, se sale y tenemos que recorrerlos con el bucle pasando por todos (incluso los que no tienen eventos activos en su revent.)
 		{
-			struct pollfd &pfd = _pollFds[i];
+			struct pollfd pfd = _pollFds[i]; // Hacemos copia local para evitar problemas de invalidacion de referencias (cuando un vector crece, puede mover toda la info a un nuevo bloque y esto invalida los punteros y referencias.) Estp puede ocurrir al aceptar nuevos clientes y añadirlos al vector. La copia local hace que como no tenemos que modificar nada de esa copia, nos evite el rpblema de la referencia.
+			if (pfd.fd == -1 || pfd.revents == 0) // Si el fd es -1, significa que es un elemento inválido (ya no lo estamos escuchando). Si revents es 0, significa que no hay eventos pendientes en este fd. En ambos casos, pasamos al siguiente elemento.
+				continue;
 			ServerSocket *serverSocket = getServerSocketByFd(pfd.fd);
-
-			if (serverSocket !=
-				NULL) //Si el elemento es uno de los sockets de servidor, entonces es una nueva conexion entrante y tenemos que aceptarla. Si no es un socket de servidor, entonces es un socket de cliente y tenemos que leer o escribir en el.
+			if (serverSocket != NULL) //Si el elemento es uno de los sockets de servidor, entonces es una nueva conexion entrante y tenemos que aceptarla. Si no es un socket de servidor, entonces es un socket de cliente y tenemos que leer o escribir en el.
 			{
-				if (pfd.revents &
-					POLLIN) // Si el elemento es el propio servidor y tiene un evento pendiente (revents != 0) y ese evento es POLLIN (una nueva conexión entrante). EL & es un and bit a bit, porque el revent se maneja por bits para cada tipo de evento. Si el revent tiene el bit de POLLIN activado, significa que hay datos para leer o una nueva conexión entrante. Por eso se hace en & con el bit del POLLIN que nos asegura que, al menos el bit del POLLIN esta activo.
+				if (pfd.revents & POLLIN) // Si el elemento es el propio servidor y tiene un evento pendiente (revents != 0) y ese evento es POLLIN (una nueva conexión entrante). EL & es un and bit a bit, porque el revent se maneja por bits para cada tipo de evento. Si el revent tiene el bit de POLLIN activado, significa que hay datos para leer o una nueva conexión entrante. Por eso se hace en & con el bit del POLLIN que nos asegura que, al menos el bit del POLLIN esta activo.
 				{
 					acceptClient(*serverSocket);
 					continue;
 				}
 			}
-			if (pfd.revents &
-				(POLLHUP | POLLERR |
-				 POLLNVAL)) // Si en el socket que estamos atendiendo hay un error (POLLERR), el socket se ha cerrado (POLLHUP) o el descriptor de archivo no es válido (POLLNVAL)...
+			if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) // Si en el socket que estamos atendiendo hay un error (POLLERR), el socket se ha cerrado (POLLHUP) o el descriptor de archivo no es válido (POLLNVAL)...
 			{
-				if (getServerSocketByFd(pfd.fd) !=
-					NULL) // Si el error ocurre en un socket de servidor, significa que hay un problema con el socket de escucha del servidor. Esto es crítico porque el servidor no podrá aceptar nuevas conexiones. En este caso, lanzamos una runtime_error para indicar que hay un error en el socket, esta llegaria al main y saldriamos del programa.
+				if (serverSocket != NULL) // Si el error ocurre en un socket de servidor, significa que hay un problema con el socket de escucha del servidor. Esto es crítico porque el servidor no podrá aceptar nuevas conexiones. En este caso, lanzamos una runtime_error para indicar que hay un error en el socket, esta llegaria al main y saldriamos del programa.
 					throw std::runtime_error("Error on listening socket");
-				disconnectClient(
-					pfd.fd); // Si el error ocurre en un socket de cliente, desconectamos al cliente y seguimos con el bucle. Esto es importante porque si no hacemos esto, el poll se quedaria bloqueado esperando a que ocurra un evento en ese socket que ya no es valido y el servidor se quedaria colgado.
+				disconnectClient(pfd.fd); // Si el error ocurre en un socket de cliente, desconectamos al cliente y seguimos con el bucle. Esto es importante porque si no hacemos esto, el poll se quedaria bloqueado esperando a que ocurra un evento en ese socket que ya no es valido y el servidor se quedaria colgado.
 				continue;
 			}
-			if (pfd.revents &
-				POLLIN) //  El socket del cliente tiene datos disponibles para ser leídos mediante recv().
-				readFromClient(pfd.fd);
-			if (pfd.revents &
-				POLLOUT) // El socket está listo para enviar datos al cliente mediante send().
-				writeToClient(pfd.fd);
+			if (pfd.revents & POLLIN) //  El socket del cliente tiene datos disponibles para ser leídos mediante recv().
+			{
+				if (!readFromClient(pfd.fd))
+				{
+					disconnectClient(pfd.fd);
+					continue;
+				}
+			}
+			if (pfd.revents & POLLOUT) // El socket está listo para enviar datos al cliente mediante send().
+			{
+				if (!writeToClient(pfd.fd))
+					disconnectClient(pfd.fd);
+			}
 		}
+		cleanupDisconnectedClients(); // Limpiamos los clientes desconectados del vector de pollfd (marcados con -1) para no seguir escuchando en ellos. No se eliminan en el momento del problema para no tener problemas de indices en el recorrido del vector de pollfd. Se hace al final de la vuelta del bucle para que no afecte a la iteración actual.
 	}
 }
 
@@ -169,6 +219,22 @@ void Server::setPollEvent(int clientSocket, short events)
 }
 
 /**
+ * Prints the poll file descriptors and their events for debugging purposes.
+ */
+void Server::printPollFds() const
+{
+	std::cout << "Poll FDs:" << std::endl;
+
+	for (size_t i = 0; i < _pollFds.size(); ++i)
+	{
+		std::cout << "  fd=" << _pollFds[i].fd
+				  << " events=" << _pollFds[i].events
+				  << " revents=" << _pollFds[i].revents
+				  << std::endl;
+	}
+}
+
+/**
  * Accepts a new client connection and adds it to the poll structure for monitoring.
  */
 void Server::acceptClient(ServerSocket &serverSocket)
@@ -183,11 +249,23 @@ void Server::acceptClient(ServerSocket &serverSocket)
 		std::cerr << "Error accepting client connection" << std::endl;
 		return;
 	}
-	std::cout
-		<< "New client connected: " << inet_ntoa(clientAddr.sin_addr) << ":"
-		<< ntohs(clientAddr.sin_port)
-		<< std::
-			   endl; //IMP: Para depuracion y entender mejor. inet_ntoa convierte la dirección IP del cliente de formato binario a formato de cadena legible. ntohs convierte el puerto del cliente de orden de bytes de red a orden de bytes del host para que se pueda mostrar correctamente.
+
+	int flags = fcntl(clientSocket, F_GETFL, 0); // Obtenemos los flags actuales del socket para poder modificarlos y poner el socket en modo no bloqueante.
+	if (flags == -1)
+	{
+		std::cerr << "Error getting client socket flags" << std::endl;
+		close(clientSocket);
+		return;
+	}
+
+	if (fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK) == -1) // Ponemos el socket del cliente en modo no bloqueante para que las operaciones de lectura y escritura no bloqueen el flujo del programa. Esto es importante para poder manejar múltiples clientes simultáneamente sin que uno de ellos bloquee a los demás.
+	{
+		std::cerr << "Error setting client socket non-blocking" << std::endl;
+		close(clientSocket);
+		return;
+	}
+
+	std::cout << "New client connected: " << inet_ntoa(clientAddr.sin_addr) << ":" << ntohs(clientAddr.sin_port) << std::endl; //IMP: Para depuracion y entender mejor. inet_ntoa convierte la dirección IP del cliente de formato binario a formato de cadena legible. ntohs convierte el puerto del cliente de orden de bytes de red a orden de bytes del host para que se pueda mostrar correctamente.
 
 	struct pollfd
 		clientPoll; //Creamos un nuevo pollfd para el cliente que acabamos de aceptar. Este pollfd nos permitirá escuchar los eventos que ocurran en el socket del cliente, como datos entrantes (POLLIN) o desconexión (POLLHUP).
@@ -197,122 +275,78 @@ void Server::acceptClient(ServerSocket &serverSocket)
 	clientPoll.revents = 0;
 
 	_pollFds.push_back(clientPoll); // lo añadimos en el vector de elementos a escuchar.
-	_clients.insert(std::make_pair(clientSocket, Client(clientSocket, serverSocket)));
+	_clients.insert(std::make_pair(clientSocket, Client(clientSocket, serverSocket))); //AQUI es donde se llama repetidamente a los constructores de copia y operadores de asignación de la clase Client. Cada vez que se acepta un nuevo cliente, se crea un objeto Client temporal con el constructor que toma el descriptor de socket del cliente y una referencia al ServerSocket. Luego, este objeto temporal se inserta en el mapa _clients usando std::make_pair, lo que provoca la copia del objeto Client temporal en el mapa. Esto es lo que causa las llamadas repetidas a los constructores de copia y operadores de asignación de Client.
 }
 
 /**
- * Reads data from a client socket, parses the HTTP request, and prepares the response.
+ * Reads data from a client socket and processes the request if complete.
  * 
- * clientSocket: The socket connected to the client.
+ * @param clientSocket The socket connected to the client.
+ * @return false if the client has to be disconnected due to a client side disconnection or an error occurred, true otherwise.
  */
-void Server::readFromClient(int clientSocket)
+bool Server::readFromClient(int clientSocket)
 {
 	char buffer[4096];
 	Client &client = getClient(clientSocket);
-	HTTPRequestParser parser;
 
-	ssize_t bytes =
-		recv(clientSocket, buffer, sizeof(buffer) - 1, 0); //Leemos lo que nos envia el cliente
-	// bytes > 0: data received, bytes == 0: client disconnected in a good way, bytes < 0: error
+	ssize_t bytes = recv(clientSocket, buffer, sizeof(buffer), 0); //Leemos lo que nos envia el cliente
+	// bytes > 0: data received, bytes == 0: client disconnected in a good way, bytes < 0: error o eagain (no hay datos disponibles en este momento, pero el cliente sigue conectado).
+	std::cout << "recv() returned: " << bytes << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (bytes == 0)
 	{
-		std::cout << "Client disconnected." << std::endl;
-		disconnectClient(clientSocket);
-		return;
+		std::cout << "Client disconnected in good way." << std::endl;
+		return false;
 	}
-	if (bytes < 0)
+	else if (bytes < 0) // Podria darse que sea un EAGAIN o EWOULDBLOCK, lo cual significa que no hay datos disponibles en este momento, pero el cliente sigue conectado. Como no podemos usar errno para chequear que es un EAGAIN o EWOULDBLOCK, daremos por hecho que un pollin activado significa que hay datos disponibles para leer, y si recv() devuelve -1, entonces es un error real y desconectamos al cliente. Lo mismo para pollout, si el pollout se activa y el send() devuelve -1, entonces es un error real y desconectamos al cliente. Lo normal seria comprobar si es un EAGAIN o EWOULDBLOCK con errno y si lo es , simplemente salir de la funcion y esperar a que el poll vuelva a activarse, ya que querria decir que por algun motivo los datos que estaban pendientes de leerse  ya no lo estan y por favor espera a la siguiente vuelta para ver si vuelven a estar.
 	{
 		std::cerr << "Error receiving data from client." << std::endl;
-		disconnectClient(clientSocket);
-		return;
+		return false;
 	}
-	buffer[bytes] = '\0';
-	std::cout
-		<< "Request: " << buffer
-		<< std::
-			   endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
-	client.getRecvBuffer().append(
-		buffer,
-		bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+	std::cout << "Request received: "; std::cout.write(buffer, bytes); std::cout << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
+	client.getRecvBuffer().append(buffer, bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 
-	if (!parser.isRequestComplete(
-			client
-				.getRecvBuffer())) //Si la peticion no esta completa, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
-	{
-		std::cout << "Request not complete yet." << std::endl;
-		return;
-	}
-	std::cout << "Request complete." << std::endl;
-	std::cout
-		<< "Request complete: " << client.getRecvBuffer()
-		<< std::
-			   endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
-	try
-	{
-		HTTPRequest request = parser.parse(
-			client
-				.getRecvBuffer()); //Parseamos la peticion que hemos obtenido con el recv y la convertimos en un objeto HTTPRequest que nos permite acceder a los diferentes elementos de la peticion (metodo, path, version, headers, body)
-		//IMP: QUITAR ESTO DESPUÉS DE HACER PRUEBAS
-		// std::cout << "Parsed request: " << std::endl;
-		// std::cout << "Method: " << request.getMethod() << std::endl;
-		// std::cout << "Path: " << request.getPath() << std::endl;
-		// std::cout << "Version: " << request.getVersion() << std::endl;
-		// std::cout << "Headers: " << std::endl;
-		// for (std::map<std::string, std::string>::const_iterator it = request.getHeaders().begin(); it != request.getHeaders().end(); ++it)
-		// 	std::cout << it->first << ": " << it->second << std::endl;
-		// std::cout << "Body: " << request.getBody() << std::endl;
-		//IMP: QUITAR ESTO DESPUÉS DE HACER PRUEBAS
-
-		client.getResponse() = handleRequest(
-			request,
-			client
-				.getServerSocket()); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
-		client.getSendBuffer() =
-			client.getResponse()
-				.serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
-		setPollEvent(
-			clientSocket,
-			POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
-	}
-	catch (const HTTPException &e)
-	{
-		client.getResponse() = createErrorResponse(
-			static_cast<HttpStatus>(e.getStatusCode()),
-			client
-				.getServerSocket()); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
-		client.getSendBuffer() = client.getResponse().serialize();
-		setPollEvent(clientSocket, POLLOUT);
-		return;
-	}
+	processNextRequest(clientSocket);
+	return true;
 }
 
-void Server::writeToClient(int clientSocket)
+/**
+ * @brief Writes data to the client socket.
+ * @param clientSocket The socket of the client.
+ * @return false if the client has to be disconnected due to an error or a not keep-alive connection, true otherwise.
+ */
+bool Server::writeToClient(int clientSocket)
 {
 	Client &client = getClient(clientSocket);
 	std::string &sendBuffer = client.getSendBuffer();
 
-	ssize_t bytesSent = send(clientSocket, sendBuffer.c_str() + client.getBytesSent(),
-							 sendBuffer.size() - client.getBytesSent(), 0);
-	if (bytesSent < 0)
+	ssize_t bytesSent = send(
+		clientSocket,
+		sendBuffer.c_str() + client.getBytesSent(),
+		sendBuffer.size() - client.getBytesSent(),
+		0);
+	if (bytesSent <= 0) // Si los bytes enviados son 0 es un error porque el pollout nos indica que el socket estaba listo para recibir datos porque tenia espacio pero cuando el send no envia nada (0) entonces se supone que es un error. En el -1 no podemos comprobar si es errno = EAGAIN por lo que entendemos que es un error al haber sido avisados de POLLOUT.
 	{
-		disconnectClient(clientSocket);
-		return;
+		std::cerr << "Error sending data to client." << std::endl;
+		return false;
 	}
 	client.addBytesSent(bytesSent);
-	std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client."
-			  << std::endl;
+	std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client." << std::endl;
+	//Si la respuesta no se ha enviado completamente, salimos y esperamos a que el socket del cliente esté listo para enviar más datos.
 	if (client.getBytesSent() < sendBuffer.size())
 	{
 		std::cout << "Response not fully sended yet." << std::endl;
-		return;
+		return true;
 	}
-	if (client.isKeepAlive())
+	//Si la respuesta se ha enviado completamente.
+	if (client.isKeepAlive()) // Si se mantiene vivo... Si no hay otra petición completa, cambiamos el evento a POLLIN para esperar a que llegue la siguiente petición.
 	{
-		client.reset();
-		setPollEvent(clientSocket, POLLIN);
+		client.reset(); //Reseteamos los campos de cliente necesarios para poder procesar peticiones.
+		if (!processNextRequest(clientSocket)) // Comprobamos si hay otra petición completa en el buffer de recepción del cliente y la procesamos inmediatamente.
+			setPollEvent(clientSocket, POLLIN); // Si no hay otra petición completa, salimos al bucle de enventos pero esta vez primero camos en POLLIN para esperar a que llegue la siguiente petición.
+		return true; // Si hemos procesado nueva petición, salimos para volver a entrar en el bucle de eventos (el poll loop) y no acaparar el hilo de ejecución. Seguira como POLLOUT si se proceso bien la peticion y POLLIN si no habia otra peticion completa y se ha puesto a esperar a que llegue la siguiente.
 	}
-	else
-		disconnectClient(clientSocket);
+	else //Si no tiene que mantenerse vivo porque isKeepAlive() devuelve false, cerramos la conexión con el cliente.
+		return false;
 }
 
 /**
@@ -336,16 +370,227 @@ Client &Server::getClient(int clientSocket)
  */
 void Server::disconnectClient(int clientSocket)
 {
-	close(clientSocket);
+	close(clientSocket); // Cerramos el socket del cliente.
 	for (size_t i = 0; i < _pollFds.size(); ++i)
 	{
 		if (_pollFds[i].fd == clientSocket)
 		{
-			_pollFds.erase(_pollFds.begin() + i);
+			_pollFds[i].fd = -1; // Marcamos el fd como inválido para que el poll ignore este elemento en la siguiente vuelta. Si lo borramos aqui del vector con erase perderiamos los indices y podriamos saltarnos descriptores o incluso leer fuera de memoria.
+			// _pollFds.erase(_pollFds.begin() + i);
 			break;
 		}
 	}
-	_clients.erase(clientSocket);
+	_clients.erase(clientSocket); // Esto si que lo podemos borrar y, ya que lo damos por cerrado y no lo vamos a utilizar
+	std::cout << "Client disconnected." << std::endl;
+}
+
+/**
+ * Cleans up the poll file descriptors by removing those that are marked as disconnected (-1).
+ */
+void Server::cleanupDisconnectedClients()
+{
+	for (int i = static_cast<int>(_pollFds.size()) - 1; i >= 0; --i) // Recorremos el vector de pollfd desde el final hacia el principio para evitar problemas de indices al borrar elementos. Uso int en lugar de size_t para poder hacer i-- sin problemas de underflow cuando lleguemos al ultimo valor para salir del buble, por lo que hay que hacer static_cast porque el valor era un size_t.
+	{
+		if (_pollFds[i].fd == -1)
+			_pollFds.erase(_pollFds.begin() + i);
+	}
+}
+
+/**
+ * Sets the connection type (keep-alive or close) for a client based on the HTTP request headers.
+ * If the request is HTTP/1.1, the connection is persistent by default unless "Connection: close" is specified.
+ * If the request is HTTP/1.0, the connection is not persistent by default unless "Connection: keep-alive" is specified.
+ * 
+ * @param client The client object.
+ * @param request The HTTP request object.
+ */
+void Server::updateClientKeepAlive(Client &client)
+{
+	std::string connection = client.getRequest().getHeader("Connection");
+	std::string version = client.getRequest().getVersion();
+
+	if (version == "HTTP/1.1")
+		client.setKeepAlive(connection != "close"); // En HTTP/1.1, la conexión es persistente por defecto, a menos que se indique "Connection: close".
+	else if (version == "HTTP/1.0")
+		client.setKeepAlive(connection == "keep-alive"); // En HTTP/1.0, la conexión no es persistente por defecto, a menos que se indique "Connection: keep-alive".
+	else
+		throw HTTPException(HTTP_VERSION_NOT_SUPPORTED, true); // Si la versión del protocolo no es ni HTTP/1.0 ni HTTP/1.1, lanzamos una excepción indicando que la versión no es soportada.
+}
+
+/**
+ * Processes the next HTTP request from a client's receive buffer.
+ * 
+ * @param clientSocket The socket connected to the client.
+ * @return True if a complete request was processed, false otherwise.
+ */
+bool Server::processNextRequest(int clientSocket)
+{
+	Client &client = getClient(clientSocket);
+	HTTPRequestParser parser;
+	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
+
+	size_t headersEnd = parser.getHeadersEnd(client.getRecvBuffer());
+	if (headersEnd == std::string::npos) //Si no hemos encontrado el final de una peticion, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
+	{
+		std::cout << "Request Headers not complete yet." << std::endl;
+		return false;
+	}
+	try
+	{
+		std::string rawHeaders = client.getRecvBuffer().substr(0, headersEnd); //Obtenemos la subcadena de los headers de a peticion, ya que hemos comprobado que hemos recibido todos los headers.
+		parser.parseRequestLine(client.getRequest(), rawHeaders); //Parseamos la request line de la peticion y la guardamos en el objeto HTTPRequest del cliente. (el método, la ruta y la versión del protocolo).
+		parser.parseHeaders(client.getRequest(), rawHeaders); //Parseamos los headers de la peticion y los guardamos en el objeto HTTPRequest del cliente. (los headers son un map de key-value).
+		config = getConfigFromHost(client.getRequest().getHeader("Host"), client.getServerSocket(), clientSocket); // CLAVE: Obtenemos el config a utilizar para esta petición, comprobando que sea válido para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
+		if (config == NULL)
+			throw HTTPException(FORBIDDEN, true); // Si no hay un config valido para el host, devolvemos un error 403 Forbidden. Esto es importante porque si no hay un config valido, significa que el host no esta permitido y no podemos servir la peticion.
+		
+		size_t requestEnd = std::string::npos;
+		std::string  body;
+		if (client.getRequest().hasHeader("Transfer-Encoding"))  //La peticion viene dividida en chunks.
+		{
+			std::cout << YELLOW << "Request has Transfer-Encoding: chunked" << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+			if (!processChunkedBody(client, config, headersEnd, requestEnd, body)) //Procesamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion.
+				return false;
+		}
+		else if (client.getRequest().hasHeader("Content-Length"))
+		{
+			std::cout << YELLOW << "Request has Content-Length" << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+			if (!processContentLengthBody(client, config, headersEnd, requestEnd, body)) //Procesamos el body de la peticion con Content-Length. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion.
+				return false;
+		}
+		else
+		{
+			requestEnd = headersEnd;
+			body = "";
+		}
+		parser.parseNormalizedBody(client.getRequest(), body); //Guardamos el body de la peticion ya normalizado en el objeto HTTPRequest del cliente.
+		std::string rawRequest = client.getRecvBuffer().substr(0, requestEnd); // IMP DEBUGGER Obtenemos la subcadena de la petición completa (headers + body) para poder mostrarla por pantalla y entenderla mejor. Luego se uede borrar.
+		client.getRecvBuffer().erase(0, requestEnd); //Eliminamos la primera peticion completa del buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar varias peticiones en un solo paquete y tenemos que ir procesando una a una.
+		std::cout << "Request complete." << std::endl;
+		std::cout << "Imprimiendo request a procesar: " << std::endl << rawRequest << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
+		std::cout << "Imprimiendo resto de recvBuffer: " << std::endl << client.getRecvBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla el resto del buffer de recepcion del cliente y poder entenderlo. IMP: luego podemos quitarla.
+		client.getRequest().print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
+		updateClientKeepAlive(client); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
+
+		HTTPResponse response = handleRequest(client.getRequest(), config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
+		client.getSendBuffer() = response.serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
+		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
+		return true;
+	}
+	catch (const HTTPException &e)
+	{
+		HTTPResponse response = createErrorResponse(e, config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
+		client.getSendBuffer() = response.serialize();
+		if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
+			client.setKeepAlive(false);
+		setPollEvent(clientSocket, POLLOUT);
+		return true;
+	}
+}
+
+/**
+ * @brief Process a chunked request body.
+ * @param client The client for which to process the request body.
+ * @param config The configuration to use for the request.
+ * @param headersEnd The position in the receive buffer (recvBuffer) where the headers end.
+ * @param requestEnd The position in the receive buffer (recvBuffer) where the entire request (headers + body) ends. It will be updated by this function.
+ * @param body The body of the request. It will be updated by this function.
+ * @return True if the body was processed successfully, false if the request is incomplete or invalid. It throws an HTTPException if the request is invalid.
+ * @throws HTTPException if the request is malformed.
+ */
+bool Server::processChunkedBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body)
+{
+	HTTPRequestParser parser;
+
+	if (client.getRequest().hasHeader("Content-Length")) //No se aceptan transfer-encoding y content-length a la vez, porque es una contradicción. Si el cliente envia ambos headers, devolvemos un error 400 Bad Request.
+		throw HTTPException(BAD_REQUEST, true);
+	std::string transferEncoding = StringUtils::toLowerString(client.getRequest().getHeader("Transfer-Encoding")); //Obtenemos el valor del header Transfer-Encoding y lo pasamos a minúsculas para poder compararlo con "chunked". Porque HTTP en la codificacion no diferencia entre mayusculas y minusculas en el tipo de la codificación de transferencia. Chunked sería tan válido como CHUNKED o Chunked.
+	if (transferEncoding != "chunked")
+		throw HTTPException(NOT_IMPLEMENTED, true);
+	if (!parser.parseChunkedBody(client.getRecvBuffer(), headersEnd, config->getClientMaxBodySize(), requestEnd, body)) //Parseamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
+		return false;
+	// if (config->getClientMaxBodySize() != 0 && body.size() > config->getClientMaxBodySize()) //Si el body de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
+	// 	throw HTTPException(CONTENT_TOO_LARGE);
+	return true;
+}
+
+/**
+ * Processes the body of an HTTP request with a Content-Length header.
+ *
+ * @param client The client for which to process the request body.
+ * @param config The configuration to use for the request.
+ * @param headersEnd The position in the receive buffer (recvBuffer) where the headers end.
+ * @param requestEnd The position in the receive buffer (recvBuffer) where the entire request (headers + body) ends.
+ * @param body The body of the request. Where the content processed will be stored and returned.
+ * @return True if the body was processed successfully, false if the request is incomplete or invalid.
+ */
+bool Server::processContentLengthBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body)
+{
+	HTTPRequestParser parser;
+	size_t contentLength = 0;
+	std::string value = client.getRequest().getHeader("Content-Length");
+
+	if (!StringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength.
+		throw HTTPException(BAD_REQUEST, true); // Si no se puede parsear el Content-Length porque tiene un formato incorrecto para un size_t, devolvemos un error 400 Bad Request.
+	if (config->getClientMaxBodySize() != 0 && contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
+		throw HTTPException(CONTENT_TOO_LARGE, true);
+	if (!parser.parseContentLengthBody(client.getRecvBuffer(), headersEnd, contentLength, requestEnd, body)) //Parseamos el body de la peticion con Content-Length. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
+		return false;
+	return true;
+}
+
+/**
+ * Validates a configuration for a specific client checking the local address and port of the request.
+ * 
+ * @param config The configuration to validate.
+ * @param clientSocket The socket connected to the client.
+ * @return A pointer to the valid configuration object, or NULL if invalid.
+ */
+const Config *Server::isValidConfig(const Config *config, int clientSocket)
+{
+	struct sockaddr_in localAddr;
+	socklen_t addrLen = sizeof(localAddr);
+	if (getsockname(clientSocket, (struct sockaddr *)&localAddr, &addrLen)< 0)
+		throw HTTPException(INTERNAL_SERVER_ERROR, true);
+	std::string localInterface = inet_ntoa(localAddr.sin_addr);
+	int localPort = ntohs(localAddr.sin_port);
+	std::cout << "---------------------------------------------Local interface: " << localInterface << ", Local port: " << localPort << std::endl; //IMP: PARA DEBUG borrar luego.
+
+	const std::vector<Listen>& listens = config->getListens();
+	for (size_t i = 0; i < listens.size(); ++i)
+	{
+		const Listen &listen = listens[i];
+		if (listen.getPort() != localPort)
+			continue;
+		if (listen.getInterface() == "0.0.0.0" || sameInterface(listen.getInterface(), localInterface)) // Si la interfaz es la global (0.0.0.0) o si es la misma (localhost y 127.0.0.1 se consideran iguales), entonces el config es válido para este cliente.	
+			return config;
+	}
+	return NULL;
+}
+
+/**
+ * Gets the configuration for a specific host from the server socket.
+ * 
+ * @param host The host name to look for.
+ * @param serverSocket The server socket to search in.
+ * @return A pointer to the configuration object, or NULL if not found.
+ */
+const Config *Server::getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket)// IMP Revisar hecho rapido AQUIIIIII
+{
+	const Config *config = NULL;
+	std::string interface;
+	if (!host.empty())
+	{	
+		size_t colonPos = host.find(':');
+		if (colonPos == std::string::npos)
+			interface = host;
+		else
+			interface = host.substr(0, colonPos);
+		config = serverSocket.getConfigFromKey(interface);
+	}
+	if (config == NULL)
+		config = serverSocket.getDefaultConfig();
+	return isValidConfig(config, clientSocket);
 }
 
 /**
@@ -354,27 +599,146 @@ void Server::disconnectClient(int clientSocket)
  * @param request The HTTP request to handle.
  * @return The HTTP response to send.
  */
-HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocket &serverSocket)
+HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
 {
 	std::string srcPath;
-	const Config &config = serverSocket.getConfig();
-
-	if (request.getPath() ==
-		"/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
-		srcPath = config.getRoot() + "/" + config.getIndex(); // el index por defecto
-	else
-		srcPath = config.getRoot() + request.getPath(); // la pagina solicitada
-
-	std::ifstream file_stream(srcPath.c_str());
-	if (!file_stream.is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
-		return createErrorResponse(NOT_FOUND, serverSocket);
-	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+	struct stat fileInfo;
+	const Location *location = config->findLocation(request.getPath());
+	std::string root = config->getRoot(); // Por defecto, el root es el del config, pero si la location tiene un root, lo sobreescribimos.
+	std::string index = config->getIndex(); // Por defecto, el index es el del config, pero si la location tiene un index, lo sobreescribimos.
+	
+	if (location == NULL)
+		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	if (location != NULL)
 	{
-		std::ostringstream bodystream;
-		bodystream << file_stream.rdbuf();
-		std::string body = bodystream.str();
-		return createResponse(OK, "text/html", body);
+		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		location->print();
+		if (location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
+			return createRedirectResponse(location->getRedirectCode(), location->getRedirectTarget());
+		if (location->hasRoot()) // Si la location tiene un root, lo sobreescribimos.
+			root = location->getRoot();
+		if (location->hasIndex()) // Si la location tiene un index, lo sobreescribimos.
+			index = location->getIndex();
 	}
+	if (!isMethodAllowed(request, location)) // Si no se permite el método, devolvemos un error 405 Method Not Allowed.
+		throw HTTPException(METHOD_NOT_ALLOWED, false);
+	srcPath = root + request.getPath();
+	std::cout << "ROOT: " << root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	std::cout << "PATH: " << request.getPath() << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	std::cout << "SRC: " << srcPath << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
+	{
+		if (errno == ENOENT) // Si el error es que no existe el fichero o directorio, devolvemos un error 404 Not Found.
+			throw HTTPException(NOT_FOUND, false);
+		if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
+			throw HTTPException(FORBIDDEN, false);
+		else // Si el error es otro, devolvemos un error 500 Internal Server Error.
+			throw HTTPException(INTERNAL_SERVER_ERROR, false);
+	}
+	if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
+	{
+		std::ifstream file_stream(srcPath.c_str());
+		if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
+			throw HTTPException(FORBIDDEN, false);
+		else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+		{
+			std::ostringstream bodystream;
+			bodystream << file_stream.rdbuf();
+			std::string body = bodystream.str();
+			return createResponse(OK, getContentType(srcPath), body);
+		}
+	}
+	else if (S_ISDIR(fileInfo.st_mode)) // SI es un directorio,
+	{
+		if (request.getPath()[request.getPath().length() - 1] != '/') // Si la ruta no termina en '/', devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL con '/' al final.
+			return createRedirectResponse(MOVED_PERMANENTLY, request.getPath() + "/");
+		else // Si la ruta termina en '/', buscamos el index del directorio y lo devolvemos como respuesta.
+		{
+			srcPath += index;
+			if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
+			{
+				if (errno == ENOENT) // El archivo index configurado no existe.
+				{
+					if (location != NULL && location->getAutoindex()) // Si la location tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
+						return createAutoIndexResponse(request.getPath());
+					else
+						throw HTTPException(FORBIDDEN, false); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
+				}
+				if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
+					throw HTTPException(FORBIDDEN, false);
+				else // Si el error es otro, devolvemos un error 500 Internal Server Error.
+					throw HTTPException(INTERNAL_SERVER_ERROR, false);
+			}
+			if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
+			{
+				std::ifstream file_stream(srcPath.c_str());
+				if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
+					throw HTTPException(FORBIDDEN, false);
+				else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+				{
+					std::ostringstream bodystream;
+					bodystream << file_stream.rdbuf();
+					std::string body = bodystream.str();
+					return createResponse(OK, getContentType(srcPath), body);
+				}
+			}
+			throw HTTPException(FORBIDDEN, false);
+		}
+	}
+	throw HTTPException(FORBIDDEN, false);
+}
+
+// HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
+// {
+// 	std::string srcPath;
+
+// 	const Location *location = config->findLocation(request.getPath());
+// 	if (location == NULL)
+// 		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+// 	else
+// 	{
+// 		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+// 		location->print();
+// 	}
+
+// 	if (location != NULL && location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
+// 		return createRedirectResponse(location);
+
+// 	if (location != NULL && !isMethodAllowed(request, location)) // Si la location no permite el método de la petición, devolvemos un error 405 Method Not Allowed.
+// 		return createErrorResponse(METHOD_NOT_ALLOWED, config);
+
+// 	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
+// 		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
+// 	else
+// 		srcPath = config->getRoot() + request.getPath(); // la pagina solicitada
+
+// 	std::ifstream file_stream(srcPath.c_str());
+// 	if (!file_stream.is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
+// 		return createErrorResponse(NOT_FOUND, config);
+// 	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+// 	{
+// 		std::ostringstream bodystream;
+// 		bodystream << file_stream.rdbuf();
+// 		std::string body = bodystream.str();
+// 		return createResponse(OK, getContentType(srcPath), body);
+// 	}
+// }
+
+/**
+ * Checks if the request method is allowed for the given location. 
+ * If there is no location to define the allowed methods, Only GET is allowed by default.
+ * If the location has defined allowed methods, it checks if the request method is in the set of allowed methods.
+ * 
+ * @param request The HTTP request.
+ * @param location The location to check.
+ * @return true if the method is allowed, false otherwise.
+ */
+bool Server::isMethodAllowed(const HTTPRequest &request, const Location *location)
+{
+	if (location == NULL || !location->hasAllowedMethods()) //Si no se encontró location para la petición o si la location encontrada no tiene metodos definidos, entonces selo admitimos GET por defecto.
+		return (request.getMethod() == GET);
+	const std::set<HTTPMethod> &allowedMethods = location->getAllowedMethods(); // SI existen methods definidos en la location, comprobamos si el metodo de la peticion esta en el set de metodos permitidos.
+	return (allowedMethods.find(request.getMethod()) != allowedMethods.end());
 }
 
 /**
@@ -385,7 +749,7 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const ServerSocke
  * @param body The body content of the response.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createResponse(HttpStatus statusCode, const std::string &contentType,
+HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &contentType,
 									const std::string &body)
 {
 	HTTPResponse response;
@@ -406,30 +770,79 @@ HTTPResponse Server::createResponse(HttpStatus statusCode, const std::string &co
  * Creates an error HTTP response with the specified status code.
  * 
  * @param statusCode The HTTP status code.
+ * @param config The configuration object.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createErrorResponse(HttpStatus statusCode, const ServerSocket &serverSocket)
+HTTPResponse Server::createErrorResponse(const HTTPException &e, const Config *config)
 {
-	const Config &config = serverSocket.getConfig();
+	HTTPStatus statusCode = static_cast<HTTPStatus>(e.getStatusCode());
 	std::ostringstream errorPagePathStream;
 
-	errorPagePathStream << config.getRoot() << config.getErrorPage(statusCode);
+	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error por defecto con el código de error y el mensaje correspondiente.
+		errorPagePathStream << DEFAULT_ERROR_PAGES_PATH << statusCode << ".html";
+	else
+		errorPagePathStream << config->getRoot() << config->getErrorPage(statusCode);
+
 	std::ostringstream bodystream;
+	HTTPResponse response;
 
 	std::ifstream error_file_stream(errorPagePathStream.str().c_str());
-	if (!error_file_stream
-			 .is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
-	{
-		bodystream << statusCode << " " << getStatusMessage(statusCode);
-		std::string body = bodystream.str();
-		return createResponse(statusCode, "text/plain", body);
-	}
+	if (!error_file_stream.is_open()) // si no puede abrir la página de error o no existe, devolvemos una página de error estática con el código de error y el mensaje correspondiente.
+		response = createDefaultErrorPage(statusCode);
 	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 	{
 		bodystream << error_file_stream.rdbuf();
 		std::string body = bodystream.str();
-		return createResponse(statusCode, "text/html", body);
+		response = createResponse(statusCode, getContentType(errorPagePathStream.str()), body);
 	}
+	if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
+		response.setHeader("Connection", "close"); // Avisamos al cliente de que la conexión se cerrará después de enviar la respuesta de error.
+	return response;
+}
+
+/**
+ * Creates a default error page for the specified status code.
+ *
+ * @param statusCode The HTTP status code.
+ * @return The created HTTP response.
+ */
+HTTPResponse Server::createDefaultErrorPage(HTTPStatus statusCode)
+{
+	std::ostringstream bodystream;
+	bodystream << statusCode << " " << getStatusMessage(statusCode);
+	std::string body = bodystream.str();
+	return createResponse(statusCode, "text/plain", body);
+}
+
+/**
+ *  Creates an HTTP redirect response based on the specified location.
+ * 
+ * @param location The location object containing the redirect information.
+ * @return The created HTTP response.
+ */
+HTTPResponse Server::createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget)
+{
+	HTTPResponse response;
+	response.setStatusCode(statusCode);
+	response.setStatusMessage(getStatusMessage(statusCode));
+	response.setHeader("Location", redirectTarget);
+	response.setHeader("Content-Length", "0");
+	return response;
+}
+
+/**
+ * Generates an autoindex page for the specified source path and request path.
+ *
+ * @param srcPath The source path of the directory.
+ * @param requestPath The request path.
+ * @return The generated autoindex page.
+ */
+HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
+{
+	std::ostringstream bodystream;
+	bodystream << "<html><head><title>Index of " << requestPath << "</title></head><body>";
+	std::string body = bodystream.str();
+	return createResponse(OK, "text/plain", body);
 }
 
 /**
@@ -438,8 +851,7 @@ HTTPResponse Server::createErrorResponse(HttpStatus statusCode, const ServerSock
  * @param fd The file descriptor of the server socket.
  * @return A pointer to the ServerSocket object, or NULL if not found.
  */
-ServerSocket *Server::getServerSocketByFd(
-	int fd) //devolvemos un puntero porque asi podemos devolver NULL si no encontramos el socket, y si devolvieramos una referencia no podriamos devolver NULL.
+ServerSocket *Server::getServerSocketByFd(int fd) //devolvemos un puntero porque asi podemos devolver NULL si no encontramos el socket, y si devolvieramos una referencia no podriamos devolver NULL.
 {
 	for (size_t i = 0; i < _serverSockets.size(); ++i)
 	{
@@ -447,4 +859,87 @@ ServerSocket *Server::getServerSocketByFd(
 			return &_serverSockets[i];
 	}
 	return NULL;
+}
+
+/**
+ * Compares two interface strings to determine if they are the same. It also considers "localhost" and "127.0.0.1" as equivalent interfaces.
+ * 
+ * @param interface1 The first interface string.
+ * @param interface2 The second interface string.
+ * @return True if the interfaces are the same, false otherwise.
+ */
+bool Server::sameInterface(const std::string &interface1, const std::string &interface2) const
+{
+	if (interface1 == interface2)
+		return true;
+	if (interface1 == "localhost" && interface2 == "127.0.0.1")
+		return true;
+	if (interface1 == "127.0.0.1" && interface2 == "localhost")
+		return true;
+	return false;
+}
+
+/**
+ * Finds a server socket corresponding to the given listen configuration.
+ * 
+ * @param listen The listen configuration to search for.
+ * @return A pointer to the ServerSocket object, or NULL if not found.
+ */
+ServerSocket *Server::findServerSocket(const Listen &listen)
+{
+	for (size_t i = 0; i < _serverSockets.size(); ++i)
+	{
+		const Listen &serverSocketListen = _serverSockets[i].getListen();
+
+		// Si el puerto es diferente, no puede ser el mismo socket.
+		if (listen.getPort() != serverSocketListen.getPort())
+			continue;
+
+		// Misma interfaz y mismo puerto porque al llegar aqui ya hemos comprobado que el puerto es el mismo. Entonces comparamos las interfaces
+		if (sameInterface(listen.getInterface(), serverSocketListen.getInterface()))
+			return &_serverSockets[i];
+
+		// Si ambos tienen el mismo puerto pero uno de los dos es interfaz 0.0.0.0, ese pasa a será el devuelto para modificarlo y hacerlo el serversocket con cubra a los demoas con ese puerto.
+		// Si listen.getInterface() == "0.0.0.0" el que devolvemos será el que modificaremos.
+		// Si serverSocketListen.getInterface() == "0.0.0.0" el que devolvemos sólo le añadiremos el nuevo config al map porque significa que el 0.0.0.0 ya existía.
+		if (listen.getInterface() == "0.0.0.0" ||
+			serverSocketListen.getInterface() == "0.0.0.0")
+			return &_serverSockets[i];
+	}
+	return NULL;
+}
+
+/**
+ * Determines the content type based on the file extension of the given path.
+ * 
+ * @param path The file path to analyze.
+ * @return The corresponding content type as a string.
+ */
+std::string Server::getContentType(const std::string &path) const
+{
+	size_t pos = path.find_last_of('.');
+	if (pos == std::string::npos)
+		return "application/octet-stream"; // Default content type if no extension is found
+	std::string extension = path.substr(pos + 1);
+	if (extension == "html" || extension == "htm")
+		return "text/html";
+	else if (extension == "css")
+		return "text/css";
+	else if (extension == "js")
+		return "application/javascript";
+	else if (extension == "json")
+		return "application/json";
+	else if (extension == "jpg" || extension == "jpeg")
+		return "image/jpeg";
+	else if (extension == "png")
+		return "image/png";
+	else if (extension == "gif")
+		return "image/gif";
+	else if (extension == "txt")
+		return "text/plain";
+	else if (extension == "pdf")
+		return "application/pdf";
+	else if (extension == "ico")
+		return "image/x-icon";
+	return "application/octet-stream"; // Default content type if no extension is found
 }

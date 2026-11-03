@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Config.hpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:25:37 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/03 02:35:59 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/03 12:52:51 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,10 @@
 #include <string>
 #include <iostream>
 #include <map>
-#include "../colors.hpp"
+#include <vector>
+#include "colors.hpp"
+#include "config/Listen.hpp"
+#include "config/Location.hpp"
 
 class Config
 {
@@ -26,28 +29,34 @@ public:
 	Config &operator=(const Config &other);
 	~Config();
 
-	int getPort() const;
-	std::string getRoot() const;
-	std::string getIndex() const;
-	std::string getHost() const;
-	std::string getErrorPage(int errorCode) const;
-	long getClientMaxBodySize() const;
-	void setPort(int port);
+	const std::string&				getServerName() const;
+	const std::vector<Listen>&		getListens() const;
+	std::string						getRoot() const;
+	std::string						getIndex() const;
+	size_t							getClientMaxBodySize() const;
+	std::string						getErrorPage(int errorCode) const;
+	const std::vector<Location>&	getLocations() const;
+
+	void setServerName(const std::string &serverName);
+	void addListen(const Listen& listen);
 	void setRoot(const std::string &root);
 	void setIndex(const std::string &index);
-	void setHost(const std::string &host);
-	void setErrorPage(int errorCode, const std::string &errorPagePath);
-	void setClientMaxBodySize(long clientMaxBodySize);
+	void setClientMaxBodySize(size_t clientMaxBodySize);
+	void addErrorPage(int errorCode, const std::string &errorPagePath);
+	void addLocation(const Location& location);
 
+	const Location* findLocation(const std::string &path) const;
+	
 	void print() const;
 
 private:
-	std::string _root;
-	std::string _index;
-	std::string _host;
-	int _port;
-	std::map<int, std::string> _errorPages; // Map para almacenar las páginas de error personalizadas, donde la clave es el código de error y el valor es la ruta del archivo HTML correspondiente.
-	long _client_max_body_size;
+	std::string 				_serverName;
+	std::vector<Listen>			_listens;
+	std::string					_root;
+	std::string 				_index;
+	size_t						_clientMaxBodySize;
+	std::map<int, std::string>	_errorPages; // Map para almacenar las páginas de error personalizadas, donde la clave es el código de error y el valor es la ruta del archivo HTML correspondiente.
+	std::vector<Location>		_locations;
 };
 
 #endif

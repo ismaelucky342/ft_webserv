@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/10 12:50:27 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/21 14:40:45 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/05 13:01:02 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,7 +20,7 @@
  * 
  * Initializes the status code to 200 (OK) and the status message to "OK".
  */
-HTTPResponse::HTTPResponse() : _statusCode(200), _statusMessage("OK")
+HTTPResponse::HTTPResponse() : _statusCode(OK), _statusMessage("OK")
 {
 	std::cout << BOLD_GREEN << "HTTPResponse default constructor called" << RESET << std::endl;
 }
@@ -109,7 +109,7 @@ const std::string &HTTPResponse::getBody() const
  * 
  * @param code The new status code.
  */
-void HTTPResponse::setStatusCode(int code)
+void HTTPResponse::setStatusCode(HTTPStatus code)
 {
 	_statusCode = code;
 }
