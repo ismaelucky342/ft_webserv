@@ -3,28 +3,26 @@
 /*                                                        :::      ::::::::   */
 /*   Config.cpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:28:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/03 12:47:07 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/03 14:08:56 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "config/Config.hpp"
-#include <fstream>
-#include <sstream>
-#include <vector>
-
 /**
  * Default constructor for the Config class. Initializes default values for
- * port, root, and index.
- * 
- * port: Default port number (8080).
- * root: Default root directory ("./").
+ * root and index, and starts without listening endpoints.
+ *
+ * root: Default root directory ("html/").
  * index: Default index file ("index.html").
- * host: Default host ("0.0.0.0").
+ * server_name: Default server name ("").
+ * _listens: Default listening endpoint ("0.0.0.0:80").
+ * _client_max_body_size: Default maximum client body size (1 MB).
  */
-Config::Config() : _serverName(""), _root("./"), _index("index.html"), _clientMaxBodySize(1024L * 1024L) // 1 MiB default
+Config::Config() : _root("html/"), _index("index.html"), _server_name(""),
+	_listens(), _clientMaxBodySize(1024L * 1024L), _locations()
 {
 	std::cout << BOLD_GREEN << "Config default constructor called" << RESET << std::endl;
 }
@@ -34,7 +32,10 @@ Config::Config() : _serverName(""), _root("./"), _index("index.html"), _clientMa
  * of another.
  */
 Config::Config(const Config &other)
-	: _serverName(other._serverName), _listens(other._listens), _root(other._root), _index(other._index), _clientMaxBodySize(other._clientMaxBodySize), _errorPages(other._errorPages), _locations(other._locations)
+	: _root(other._root), _index(other._index),
+	  _server_name(other._server_name), _listens(other._listens),
+	  _errorPages(other._errorPages),
+	  _clientMaxBodySize(other._clientMaxBodySize), _locations(other._locations)
 {
 	std::cout << BOLD_GREEN << "Config copy constructor called" << RESET << std::endl;
 }
@@ -47,12 +48,12 @@ Config &Config::operator=(const Config &other)
 {
 	if (this != &other)
 	{
-		_serverName = other._serverName;
-		_listens = other._listens;
 		_root = other._root;
 		_index = other._index;
-		_clientMaxBodySize = other._clientMaxBodySize;
+		_server_name = other._server_name;
+		_listens = other._listens;
 		_errorPages = other._errorPages;
+		_clientMaxBodySize = other._clientMaxBodySize;
 		_locations = other._locations;
 	}
 	std::cout << BOLD_GREEN << "Config assignment operator called" << RESET << std::endl;
@@ -65,24 +66,6 @@ Config &Config::operator=(const Config &other)
 Config::~Config()
 {
 	std::cout << BOLD_RED << "Config destructor called" << RESET << std::endl;
-}
-
-/**
- * Gets the server name.
- * @return A constant reference to the server name.
- */
-const std::string& Config::getServerName() const
-{
-	return _serverName;
-}
-
-/**
- * Gets the list of Listen objects.
- * @return A constant reference to the vector of Listen objects.
- */
-const std::vector<Listen>& Config::getListens() const
-{
-	return _listens;
 }
 
 /**
@@ -103,15 +86,6 @@ std::string Config::getIndex() const
 	return _index;
 }
 
-/**
- * Gets the maximum allowed size for client request bodies.
- * @return The maximum allowed size in bytes.
- */
-size_t Config::getClientMaxBodySize() const
-{
-	return _clientMaxBodySize;
-}
-
 /*
  * Gets the error page path for a specific error code.
  * @param errorCode The HTTP error code.
@@ -126,30 +100,11 @@ std::string Config::getErrorPage(int errorCode) const
 }
 
 /**
- * Gets the list of Location objects.
- * @return A constant reference to the vector of Location objects.
+ * Gets the maximum accepted request body size in bytes.
  */
-const std::vector<Location>& Config::getLocations() const
+size_t Config::getClientMaxBodySize() const
 {
-	return _locations;
-}
-
-/**
- * Sets the server name.
- * @param serverName The server name.
- */
-void Config::setServerName(const std::string &serverName)
-{
-	_serverName = serverName;
-}
-
-/**
- * Adds a Listen object to the configuration.
- * @param listen The Listen object to add.
- */
-void Config::addListen(const Listen& listen)
-{
-	_listens.push_back(listen);
+	return _clientMaxBodySize;
 }
 
 /**
@@ -171,12 +126,53 @@ void Config::setIndex(const std::string &index)
 }
 
 /**
- * Sets the maximum allowed size for client request bodies.
- * @param size The maximum allowed size in bytes.
+ * Gets every listening endpoint configured for this server.
  */
-void Config::setClientMaxBodySize(size_t clientMaxBodySize)
+const std::vector<Listen> &Config::getListens() const
 {
-	_clientMaxBodySize = clientMaxBodySize;
+	return _listens;
+}
+
+/**
+ * Gets the locations configured for this server, in declaration order.
+ */
+const std::vector<Location> &Config::getLocations() const
+{
+	return _locations;
+}
+
+/**
+ * Gets the server name.
+ * @return The server name, or an empty string if it was not configured.
+ */
+std::string Config::getServerName() const
+{
+	return _server_name;
+}
+
+/**
+ * Adds a listening endpoint to this server.
+ */
+void Config::addListen(const Listen &listen)
+{
+	_listens.push_back(listen);
+}
+
+/**
+ * Adds a location to this server.
+ */
+void Config::addLocation(const Location &location)
+{
+	_locations.push_back(location);
+}
+
+/**
+ * Sets the server name.
+ * @param serverName The server name.
+ */
+void Config::setServerName(const std::string &serverName)
+{
+	_server_name = serverName;
 }
 
 /**
@@ -184,19 +180,44 @@ void Config::setClientMaxBodySize(size_t clientMaxBodySize)
  * @param errorCode The HTTP error code.
  * @param errorPagePath The path to the corresponding error page.
  */
-void Config::addErrorPage(int errorCode, const std::string &errorPagePath)
+void Config::setErrorPage(int errorCode, const std::string &errorPagePath)
 {
 	_errorPages.insert(std::make_pair(errorCode, errorPagePath));
 }
 
 /**
- * Adds a Location object to the configuration.
- * @param location The Location object to add.
+ * Sets the maximum accepted request body size in bytes.
  */
-void Config::addLocation(const Location& location)
+void Config::setClientMaxBodySize(size_t clientMaxBodySize)
 {
-	_locations.push_back(location);
+	_clientMaxBodySize = clientMaxBodySize;
 }
+
+/**
+ * Prints the configuration values.
+ */
+void Config::print() const
+{
+	std::cout << BOLD_GREEN << "Config values:" << RESET << std::endl;
+	std::cout << "  Root: " << _root << std::endl;
+	std::cout << "  Index: " << _index << std::endl;
+	std::cout << "  Listens:" << std::endl;
+	for (size_t i = 0; i < _listens.size(); ++i)
+		std::cout << "    [" << i << "] "
+			<< _listens[i].getInterface() << ":"
+			<< _listens[i].getPort() << std::endl;
+	std::cout << "  Server name: " << _server_name << std::endl;
+	std::cout << "  Client max body size: "
+		<< _clientMaxBodySize << " bytes" << std::endl;
+	std::cout << "  Error Pages:" << std::endl;
+	for (std::map<int, std::string>::const_iterator it = _errorPages.begin();
+		 it != _errorPages.end(); ++it)
+		std::cout << "    " << it->first << ": " << it->second << std::endl;
+	std::cout << "  Locations:" << std::endl;
+	for (size_t i = 0; i < _locations.size(); ++i)
+		_locations[i].print();
+}
+
 
 /**
  * Finds the most specific Location that matches the given path.
@@ -217,26 +238,4 @@ const Location* Config::findLocation(const std::string &path) const
 				location = &_locations[i];
 	}
 	return location;
-}
-
-/**
- * Prints the configuration values.
- */
-void Config::print() const
-{
-	std::cout << BOLD_GREEN << "Config values:" << RESET << std::endl;
-	std::cout << "  Server Name: " << _serverName << std::endl;
-	std::cout << "  Listens:" << std::endl;
-	for (size_t i = 0; i < _listens.size(); ++i)
-		std::cout << "    Port: " << _listens[i].getPort() << ", Interface: " << _listens[i].getInterface() << std::endl;
-	std::cout << "  Root: " << _root << std::endl;
-	std::cout << "  Index: " << _index << std::endl;
-	std::cout << "  Client Max Body Size: " << _clientMaxBodySize << std::endl;
-	std::cout << "  Error Pages:" << std::endl;
-	for (std::map<int, std::string>::const_iterator it = _errorPages.begin();
-		 it != _errorPages.end(); ++it)
-		std::cout << "    " << it->first << ": " << it->second << std::endl;
-	std::cout << "  Locations:" << std::endl;
-	for (size_t i = 0; i < _locations.size(); ++i)
-		_locations[i].print();
 }

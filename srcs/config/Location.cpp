@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Location.cpp                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 12:23:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/06 11:40:40 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/10/30 15:29:24 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,7 +19,8 @@
  */
 Location::Location(const std::string &path)
 	: _path(path), _hasRoot(false), _hasIndex(false), _hasAutoindex(false),
-	  _hasAllowedMethods(false), _hasRedirect(false), _hasUploadStore(false), _hasCgi(false) {}
+	  _autoindex(false), _hasAllowedMethods(false), _hasRedirect(false),
+	  _redirectCode(OK), _hasUploadStore(false), _hasCgi(false) {}
 
 
 /**

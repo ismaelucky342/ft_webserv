@@ -6,14 +6,14 @@
 /*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/30 06:09:25 by ide-dieg          #+#    #+#             */
-/*   Updated: 2026/08/03 02:36:20 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/07/30 06:09:28 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef TOKENIZER_HPP
 #define TOKENIZER_HPP
 
-#include "Token.hpp"
+#include "config/Token.hpp"
 #include <string>
 #include <vector>
 

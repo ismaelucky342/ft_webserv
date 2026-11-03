@@ -37,14 +37,21 @@ private:
 	std::vector<std::string> _arguments;
 
 	void check_index() const;
+	void normalize_listen();
 	void check_listen() const;
 	void check_listen_argument(const std::string &argument) const;
 	bool is_ipv4(const std::string &argument) const;
 	bool is_port(const std::string &argument) const;
 	bool is_ipv4_port(const std::string &argument) const;
 	void check_root() const;
+	void check_server_name() const;
 	void check_error_page() const;
 	void check_client_max_body_size() const;
+	void check_autoindex() const;
+	void check_allowed_methods() const;
+	void check_return() const;
+	void check_upload_store() const;
+	void check_cgi() const;
 };
 
 #endif

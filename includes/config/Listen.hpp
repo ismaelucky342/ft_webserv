@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   Listen.hpp                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/29 11:21:28 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/07/30 17:23:47 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/09/18 13:13:37 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,7 +27,7 @@ public:
 
 	int getPort() const;
 	const std::string &getInterface() const;
-	
+
 private:
 	int _port;
 	std::string _interface;

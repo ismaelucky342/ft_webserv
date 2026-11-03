@@ -23,10 +23,16 @@ SRC_FILES	=	main.cpp \
 				server/Server.cpp \
 				server/ServerSocket.cpp \
 				server/Client.cpp \
+				config/BlockParser.cpp \
 				config/Config.cpp \
 				config/ConfigParser.cpp \
+				config/Directives.cpp \
 				config/Listen.cpp \
 				config/Location.cpp \
+				config/LocationParser.cpp \
+				config/ServerParser.cpp \
+				config/Token.cpp \
+				config/Tokenizer.cpp \
 				http/HTTPException.cpp \
 				http/HTTPRequest.cpp \
 				http/HTTPRequestParser.cpp \

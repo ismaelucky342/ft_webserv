@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   ConfigParser.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 14:38:09 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/03 12:59:11 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/08/01 12:10:09 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,10 @@
 #define CONFIGPARSER_HPP
 
 #include "config/Config.hpp"
+#include "config/ServerParser.hpp"
+#include "config/Token.hpp"
+#include "config/Tokenizer.hpp"
+#include <string>
 #include <vector>
 
 class ConfigParser
@@ -25,30 +29,21 @@ public:
 	~ConfigParser();
 
 	std::vector<Config> parse(const std::string &filename);
+	const std::vector<Token> &getTokens() const; // debug
+	const std::vector<ServerParser> &getServers() const; // debug
 
 private:
-	std::vector<std::string> _tokens;
-	size_t _pos;
+	std::string _fileContent;
+	Tokenizer _tokenizer;
+	std::vector<Token> _tokens;
+	std::vector<ServerParser> _servers;
 
-	const std::string &current() const;
-	void next();
-	void expect(const std::string &token);
-
-	Config parseServer();
-	void parseListen(Config &config);
-	void parseServerName(Config &config);
-	const std::string parseRoot();
-	const std::string parseIndex();
-	void parseErrorPage(Config &config);
-	bool validateMaxBodySize(const std::string &str, size_t &result);
-	void parseClientMaxBodySize(Config &config);
-	void parseOther(); // BORRAR Auxiliar para imprimir los bloques que aun no parseo. Luego se eliminará
-	void parseLocation(Config &config); //Los de location para pruebas mientras unificamos.
-	void parseAutoindex(Location &location);
-	void parseAllowMethods(Location &location);
-	void parseRedirect(Location &location);
-	void parseUploadStore(Location &location);
-	void parseCgi(Location &location);
+	std::string readFile(const std::string &filename) const;
+	void buildServers();
+	void check_listen_and_servername() const;
+	Listen parseListen(const std::string &argument) const;
+	std::vector<Config> buildConfigs() const;
+	long strToLong(const std::string &str) const;
 };
 
 #endif

@@ -6,11 +6,13 @@
 /*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/30 06:10:01 by ide-dieg          #+#    #+#             */
-/*   Updated: 2026/08/03 02:35:04 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/08/02 19:02:14 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "config/Directives.hpp"
+#include "http/HTTPMethods.hpp"
+#include "http/HTTPStatus.hpp"
 #include <stdexcept>
 
 /**
@@ -66,6 +68,8 @@ Directives::Directives(const std::vector<Token> &tokens, size_t index)
 		_arguments.push_back(tokens[index].getValue());
 		++index;
 	}
+	if (_directive == "listen")
+		normalize_listen();
 	check_directive();
 }
 
@@ -110,7 +114,10 @@ void Directives::check_directive() const
 		throw std::runtime_error("Directive cannot be empty");
 	if (_directive != "listen" && _directive != "root" &&
 		_directive != "index" && _directive != "error_page" &&
-		_directive != "client_max_body_size")
+		_directive != "client_max_body_size" &&
+		_directive != "server_name" && _directive != "autoindex" &&
+		_directive != "allowed_methods" && _directive != "return" &&
+		_directive != "upload_store" && _directive != "cgi")
 		throw std::runtime_error("Error: invalid directive: " + _directive);
 	if (_directive == "index")
 		check_index();
@@ -118,10 +125,87 @@ void Directives::check_directive() const
 		check_listen();
 	else if (_directive == "root")
 		check_root();
+	else if (_directive == "server_name")
+		check_server_name();
 	else if (_directive == "error_page")
 		check_error_page();
 	else if (_directive == "client_max_body_size")
 		check_client_max_body_size();
+	else if (_directive == "autoindex")
+		check_autoindex();
+	else if (_directive == "allowed_methods")
+		check_allowed_methods();
+	else if (_directive == "return")
+		check_return();
+	else if (_directive == "upload_store")
+		check_upload_store();
+	else if (_directive == "cgi")
+		check_cgi();
+}
+
+/**
+ * Comprueba que autoindex reciba exactamente on u off.
+ */
+void Directives::check_autoindex() const
+{
+	if (_arguments.size() != 1)
+		throw std::runtime_error("Directive autoindex requires exactly one argument");
+	if (_arguments[0] != "on" && _arguments[0] != "off")
+		throw std::runtime_error("Directive autoindex requires on or off");
+}
+
+/**
+ * Comprueba que haya al menos un método HTTP soportado por el servidor.
+ */
+void Directives::check_allowed_methods() const
+{
+	if (_arguments.empty())
+		throw std::runtime_error("Directive allowed_methods requires at least one argument");
+	for (size_t i = 0; i < _arguments.size(); ++i)
+		stringToHTTPMethod(_arguments[i]);
+}
+
+/**
+ * Comprueba un código de redirección soportado y un destino no vacío.
+ */
+void Directives::check_return() const
+{
+	if (_arguments.size() != 2)
+		throw std::runtime_error("Directive return requires exactly two arguments");
+	const HTTPStatus status = stringToHTTPStatus(_arguments[0]);
+	if (status < 300 || status > 399)
+		throw std::runtime_error("Directive return requires a redirection status code");
+	if (_arguments[1].empty())
+		throw std::runtime_error("Directive return target cannot be empty");
+}
+
+/**
+ * Comprueba que upload_store reciba una única ruta no vacía.
+ */
+void Directives::check_upload_store() const
+{
+	if (_arguments.size() != 1)
+		throw std::runtime_error("Directive upload_store requires exactly one argument");
+	if (_arguments[0].empty())
+		throw std::runtime_error("Directive upload_store path cannot be empty");
+	if (_arguments[0].size() > 4096)
+		throw std::runtime_error("Directive upload_store path exceeds maximum path length");
+}
+
+/**
+ * Comprueba una extensión iniciada por punto y la ruta de su intérprete.
+ */
+void Directives::check_cgi() const
+{
+	if (_arguments.size() != 2)
+		throw std::runtime_error("Directive cgi requires exactly two arguments");
+	if (_arguments[0].size() < 2 || _arguments[0][0] != '.' ||
+		_arguments[0].find('/') != std::string::npos)
+		throw std::runtime_error("Directive cgi requires a file extension starting with a dot");
+	if (_arguments[1].empty())
+		throw std::runtime_error("Directive cgi executable path cannot be empty");
+	if (_arguments[1].size() > 4096)
+		throw std::runtime_error("Directive cgi executable path exceeds maximum path length");
 }
 
 /**
@@ -142,9 +226,22 @@ void Directives::check_index() const
 }
 
 /**
+ * Traduce localhost a su dirección IPv4 antes de validar listen.
+ */
+void Directives::normalize_listen()
+{
+	for (size_t i = 0; i < _arguments.size(); ++i)
+	{
+		if (_arguments[i] == "localhost")
+			_arguments[i] = "127.0.0.1";
+		else if (_arguments[i].find("localhost:") == 0)
+			_arguments[i] = "127.0.0.1" + _arguments[i].substr(9);
+	}
+}
+
+/**
  * Comprueba que la directiva listen tenga exactamente un argumento y que sea válido.
- * de momento solo se permite un argumento, pero se puede ampliar para permitir varios.
- * pero lo he dejado asi para que se adapte a la estructura de datos de Config.
+ * Cada directiva representa una única entrada del vector de escuchas de Config.
  */
 void Directives::check_listen() const
 {
@@ -247,6 +344,17 @@ void Directives::check_root() const
 		throw std::runtime_error("Directive root path cannot be empty");
 	if (_arguments[0].size() > 4096)
 		throw std::runtime_error("Directive root path exceeds maximum path length");
+}
+
+/**
+ * Comprueba que server_name tenga exactamente un nombre no vacío.
+ */
+void Directives::check_server_name() const
+{
+	if (_arguments.size() != 1)
+		throw std::runtime_error("Directive server_name requires exactly one argument");
+	if (_arguments[0].empty())
+		throw std::runtime_error("Directive server_name cannot be empty");
 }
 
 /**

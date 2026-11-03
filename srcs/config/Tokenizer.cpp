@@ -6,7 +6,7 @@
 /*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/30 06:09:30 by ide-dieg          #+#    #+#             */
-/*   Updated: 2026/08/03 02:35:17 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/07/30 06:09:35 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -57,37 +57,27 @@ void Tokenizer::check_tokens() const
 }
 
 /**
- * Comprueba el cierre, anidamiento y contenido de los bloques entre llaves.
+ * Comprueba el cierre y anidamiento de los bloques entre llaves.
  */
 void Tokenizer::check_braces() const
 {
-	bool	openBrace = false;
-	int		stringCount;
+	size_t braceCount = 0;
 
 	for (size_t i = 0; i < _tokens.size(); ++i)
 	{
 		if (_tokens[i].getType() == 1)
 		{
 			if (_tokens[i].getValue() == "{")
-			{
-				if (openBrace)
-					throw std::runtime_error("Error: nested opening brace in configuration file");
-				openBrace = true;
-				stringCount = 0;
-			}
+				++braceCount;
 			else if (_tokens[i].getValue() == "}")
 			{
-				if (!openBrace)
+				if (braceCount == 0)
 					throw std::runtime_error("Error: closing brace without opening brace");
-				openBrace = false;
-				if (stringCount == 0)
-					throw std::runtime_error("Error: empty block in configuration file");
+				--braceCount;
 			}
 		}
-		else if (_tokens[i].getType() == 2)
-			++stringCount;
 	}
-	if (openBrace)
+	if (braceCount != 0)
 		throw std::runtime_error("Error: opening brace without closing brace");
 }
 
@@ -96,23 +86,23 @@ void Tokenizer::check_braces() const
  */
 void Tokenizer::check_tokens_outside_braces() const
 {
-	bool insideBraces = false;
+	size_t braceCount = 0;
 
 	for (size_t i = 0; i < _tokens.size(); ++i)
 	{
 		if (_tokens[i].getType() == 1 &&
 			_tokens[i].getValue() == "{")
 		{
-			insideBraces = true;
+			++braceCount;
 			continue;
 		}
 		if (_tokens[i].getType() == 1 &&
 			_tokens[i].getValue() == "}")
 		{
-			insideBraces = false;
+			--braceCount;
 			continue;
 		}
-		if (!insideBraces && !(_tokens[i].getType() == 2 && _tokens[i].getValue() == "server"))
+		if (braceCount == 0 && !(_tokens[i].getType() == 2 && _tokens[i].getValue() == "server"))
 			throw std::runtime_error("Error: only the server token is allowed outside braces");
 	}
 }
