@@ -18,7 +18,8 @@
 
 static void printTokens(const std::vector<Token> &tokens)
 {
-	std::cout << BOLD_CYAN << "\nTOKENS" << RESET << std::endl;
+	std::cout << BOLD_CYAN << "\nTOKENS (" << tokens.size() << ")"
+			  << RESET << std::endl;
 	for (size_t i = 0; i < tokens.size(); ++i)
 		std::cout << "Token[" << i << "]"
 				  << " type=" << tokens[i].getType()
@@ -57,22 +58,28 @@ static void printBlocks(const std::vector<BlockParser> &blocks,
 
 static void printServers(const std::vector<ServerParser> &servers)
 {
-	std::cout << BOLD_CYAN << "\nSERVERS" << RESET << std::endl;
+	std::cout << BOLD_CYAN << "\nSERVERS (" << servers.size()
+			  << ", declared directives)" << RESET << std::endl;
 	for (size_t i = 0; i < servers.size(); ++i)
 	{
 		std::cout << BOLD_YELLOW << "Server[" << i << "]"
 				  << RESET << std::endl;
+		std::cout << "server {" << std::endl;
 		printDirectives(servers[i].getDirectives(), "  ");
 		printBlocks(servers[i].getBlocks(), "  ");
+		std::cout << "}" << std::endl;
 	}
 }
 
 static void printConfigs(const std::vector<Config> &configs)
 {
-	std::cout << BOLD_CYAN << "\nCONFIGS" << RESET << std::endl;
+	std::cout << BOLD_CYAN << "\nCONFIGS (" << configs.size()
+			  << ", parsed values; no location inheritance)" << RESET << std::endl;
 	for (size_t i = 0; i < configs.size(); ++i)
 	{
 		std::cout << BOLD_YELLOW << "Config[" << i << "]"
+				  << " server_name=\"" << configs[i].getServerName() << "\""
+				  << " (" << configs[i].getLocations().size() << " locations)"
 				  << RESET << std::endl;
 		configs[i].print();
 	}

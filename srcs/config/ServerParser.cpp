@@ -6,7 +6,7 @@
 /*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/30 06:09:49 by ide-dieg          #+#    #+#             */
-/*   Updated: 2026/07/30 06:09:51 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/06 00:27:08 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -111,7 +111,8 @@ void ServerParser::check_directive_types() const
 	{
 		const std::string &name = _directives[i].getDirective();
 		if (name != "listen" && name != "server_name" && name != "root" &&
-			name != "index" && name != "error_page" && name != "client_max_body_size")
+			name != "index" && name != "error_page" && name != "client_max_body_size" &&
+			name != "autoindex" && name != "return")
 			throw std::runtime_error("Error: directive \"" + name +
 				"\" is not allowed inside server");
 	}

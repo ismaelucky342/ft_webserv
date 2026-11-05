@@ -6,7 +6,7 @@
 /*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/03 18:06:56 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/06 00:31:11 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -259,6 +259,10 @@ std::vector<Config> ConfigParser::buildConfigs() const
 					throw std::runtime_error("Error: index requires one argument");
 				config.setIndex(arguments[0]);
 			}
+			else if (name == "autoindex")
+				config.setAutoindex(arguments[0] == "on");
+			else if (name == "return")
+				config.setRedirect(stringToHTTPStatus(arguments[0]), arguments[1]);
 			else if (name == "server_name")
 			{
 				if (arguments.size() != 1)

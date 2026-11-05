@@ -111,7 +111,8 @@ void ServerParser::check_directive_types() const
 	{
 		const std::string &name = _directives[i].getDirective();
 		if (name != "listen" && name != "server_name" && name != "root" &&
-			name != "index" && name != "error_page" && name != "client_max_body_size")
+			name != "index" && name != "error_page" && name != "client_max_body_size" &&
+			name != "autoindex" && name != "return")
 			throw std::runtime_error("Error: directive \"" + name +
 				"\" is not allowed inside server");
 	}

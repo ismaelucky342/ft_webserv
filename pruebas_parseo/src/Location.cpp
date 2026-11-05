@@ -333,7 +333,10 @@ void Location::print() const
 	if (_hasIndex)
 		std::cout << "      Index: " << _index << std::endl;
 	if (_hasAutoindex)
-		std::cout << "      Autoindex: " << (_autoindex ? "ON" : "OFF") << std::endl;
+		std::cout << "      Autoindex: " << (_autoindex ? "ON" : "OFF")
+			<< " (hasAutoindex=true)" << std::endl;
+	else
+		std::cout << "      Autoindex: <not set> (hasAutoindex=false)" << std::endl;
 	if (_hasAllowedMethods)
 	{
 		std::cout << "      Allowed Methods: ";
@@ -358,7 +361,10 @@ void Location::print() const
 		std::cout << std::endl;
 	}
 	if (_hasRedirect)
-		std::cout << "      Redirect: " << _redirectCode << " " << _redirectTarget << std::endl;
+		std::cout << "      Return: " << _redirectCode << " " << _redirectTarget
+			<< " (hasRedirect=true)" << std::endl;
+	else
+		std::cout << "      Return: <not set> (hasRedirect=false)" << std::endl;
 	if (_hasUploadStore)
 		std::cout << "      Upload Store: " << _uploadStore << std::endl;
 	if (_hasCgi)

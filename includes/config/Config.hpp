@@ -6,7 +6,7 @@
 /*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/03 15:25:37 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/03 14:04:08 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/06 00:28:40 by ide-dieg         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@
 
 #include "config/Listen.hpp"
 #include "config/Location.hpp"
+#include "http/HTTPStatus.hpp"
 #include "colors.hpp"
 #include <iostream>
 #include <map>
@@ -31,6 +32,11 @@ public:
 
 	std::string getRoot() const;
 	std::string getIndex() const;
+	bool hasAutoindex() const;
+	bool getAutoindex() const;
+	bool hasRedirect() const;
+	HTTPStatus getRedirectCode() const;
+	const std::string &getRedirectTarget() const;
 	const std::vector<Listen> &getListens() const;
 	const std::vector<Location> &getLocations() const;
 	std::string getServerName() const;
@@ -38,6 +44,8 @@ public:
 	size_t getClientMaxBodySize() const;
 	void setRoot(const std::string &root);
 	void setIndex(const std::string &index);
+	void setAutoindex(bool enabled);
+	void setRedirect(HTTPStatus code, const std::string &target);
 	void addListen(const Listen &listen);
 	void addLocation(const Location &location);
 	void setServerName(const std::string &serverName);
@@ -50,6 +58,11 @@ public:
 private:
 	std::string _root;
 	std::string _index;
+	bool _hasAutoindex;
+	bool _autoindex;
+	bool _hasRedirect;
+	HTTPStatus _redirectCode;
+	std::string _redirectTarget;
 	std::string _server_name;
 	std::vector<Listen> _listens;
 	std::map<int, std::string> _errorPages; // Map para almacenar las páginas de error personalizadas, donde la clave es el código de error y el valor es la ruta del archivo HTML correspondiente.

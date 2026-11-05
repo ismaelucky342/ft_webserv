@@ -21,7 +21,9 @@
  * _listens: Default listening endpoint ("0.0.0.0:80").
  * _client_max_body_size: Default maximum client body size (1 MB).
  */
-Config::Config() : _root("html/"), _index("index.html"), _server_name(""),
+Config::Config() : _root("html/"), _index("index.html"),
+	_hasAutoindex(false), _autoindex(false), _hasRedirect(false),
+	_redirectCode(OK), _server_name(""),
 	_listens(), _clientMaxBodySize(1024L * 1024L), _locations()
 {
 	std::cout << BOLD_GREEN << "Config default constructor called" << RESET << std::endl;
@@ -33,6 +35,9 @@ Config::Config() : _root("html/"), _index("index.html"), _server_name(""),
  */
 Config::Config(const Config &other)
 	: _root(other._root), _index(other._index),
+	  _hasAutoindex(other._hasAutoindex), _autoindex(other._autoindex),
+	  _hasRedirect(other._hasRedirect), _redirectCode(other._redirectCode),
+	  _redirectTarget(other._redirectTarget),
 	  _server_name(other._server_name), _listens(other._listens),
 	  _errorPages(other._errorPages),
 	  _clientMaxBodySize(other._clientMaxBodySize), _locations(other._locations)
@@ -50,6 +55,11 @@ Config &Config::operator=(const Config &other)
 	{
 		_root = other._root;
 		_index = other._index;
+		_hasAutoindex = other._hasAutoindex;
+		_autoindex = other._autoindex;
+		_hasRedirect = other._hasRedirect;
+		_redirectCode = other._redirectCode;
+		_redirectTarget = other._redirectTarget;
 		_server_name = other._server_name;
 		_listens = other._listens;
 		_errorPages = other._errorPages;
@@ -84,6 +94,31 @@ std::string Config::getRoot() const
 std::string Config::getIndex() const
 {
 	return _index;
+}
+
+bool Config::hasAutoindex() const
+{
+	return _hasAutoindex;
+}
+
+bool Config::getAutoindex() const
+{
+	return _autoindex;
+}
+
+bool Config::hasRedirect() const
+{
+	return _hasRedirect;
+}
+
+HTTPStatus Config::getRedirectCode() const
+{
+	return _redirectCode;
+}
+
+const std::string &Config::getRedirectTarget() const
+{
+	return _redirectTarget;
 }
 
 /*
@@ -123,6 +158,19 @@ void Config::setRoot(const std::string &root)
 void Config::setIndex(const std::string &index)
 {
 	_index = index;
+}
+
+void Config::setAutoindex(bool enabled)
+{
+	_autoindex = enabled;
+	_hasAutoindex = true;
+}
+
+void Config::setRedirect(HTTPStatus code, const std::string &target)
+{
+	_redirectCode = code;
+	_redirectTarget = target;
+	_hasRedirect = true;
 }
 
 /**
@@ -201,6 +249,16 @@ void Config::print() const
 	std::cout << BOLD_GREEN << "Config values:" << RESET << std::endl;
 	std::cout << "  Root: " << _root << std::endl;
 	std::cout << "  Index: " << _index << std::endl;
+	if (_hasAutoindex)
+		std::cout << "  Autoindex: " << (_autoindex ? "ON" : "OFF")
+			<< " (hasAutoindex=true)" << std::endl;
+	else
+		std::cout << "  Autoindex: <not set> (hasAutoindex=false)" << std::endl;
+	if (_hasRedirect)
+		std::cout << "  Return: " << _redirectCode << " " << _redirectTarget
+			<< " (hasRedirect=true)" << std::endl;
+	else
+		std::cout << "  Return: <not set> (hasRedirect=false)" << std::endl;
 	std::cout << "  Listens:" << std::endl;
 	for (size_t i = 0; i < _listens.size(); ++i)
 		std::cout << "    [" << i << "] "
