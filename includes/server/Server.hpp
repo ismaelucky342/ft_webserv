@@ -13,6 +13,7 @@
 #include "http/HTTPException.hpp"
 #include "server/Client.hpp"
 #include "server/ServerSocket.hpp"
+#include "config/EffectiveConfig.hpp"
 class Server
 {
 private:
@@ -40,6 +41,7 @@ private:
 	bool processContentLengthBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body);
 	const Config *isValidConfig(const Config *config, int clientSocket);
 	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
+	EffectiveConfig resolveConfig(const Config *config, const Location *location) const;
 	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config);
 	bool isMethodAllowed(const HTTPRequest &request, const Location *location);
 	//Response handling

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/06 12:10:12 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/06 16:17:43 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -152,7 +152,7 @@ void Server::runLoop()
 		std::cout << "---- BEFORE POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 		size_t fdsSize = _pollFds.size(); // Guardo el tamaño del vector de pollfd antes de entrar en el bucle, porque si aceptamos un nuevo cliente, el tamaño del vector aumentará y así evitamos recorrer los nuevos elementos añadidos en esta vuelta del bucle, que no tienen eventos pendientes y que podrían causar problemas.
-		int pollCount = poll(_pollFds.data(), fdsSize, 1000); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito, 1000 = 1 segundo). Lo ponemos a 1 segundo para que el poll no se quede bloqueado indefinidamente y podamos salir del bucle si g_running se pone a 0 (SIGINT), además de para poder revisar timeouts de clientes.
+		int pollCount = poll(_pollFds.data(), fdsSize, -1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito, 1000 = 1 segundo). Lo ponemos a 1 segundo para que el poll no se quede bloqueado indefinidamente y podamos salir del bucle si g_running se pone a 0 (SIGINT), además de para poder revisar timeouts de clientes.
 		std::cout << "poll() returned " << pollCount << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 
@@ -688,6 +688,38 @@ const Config *Server::getConfigFromHost(const std::string &host, const ServerSoc
 	return isValidConfig(config, clientSocket);
 }
 
+
+EffectiveConfig Server::resolveConfig(const Config *config, const Location *location) const
+{
+	EffectiveConfig effective;
+
+	effective.root = config->getRoot();
+	effective.index = config->getIndex();
+	effective.autoindex = config->getAutoindex();
+	effective.hasRedirect = config->hasRedirect();
+	if (config->hasRedirect())
+	{
+		effective.redirectCode = config->getRedirectCode();
+		effective.redirectTarget = config->getRedirectTarget();
+	}	
+	if (location != NULL)
+	{
+		if (location->hasRoot())
+			effective.root = location->getRoot();
+		if (location->hasIndex())
+			effective.index = location->getIndex();
+		if (location->hasAutoindex())
+			effective.autoindex = location->getAutoindex();
+		if (location->hasRedirect())
+		{
+			effective.hasRedirect = true;
+			effective.redirectCode = location->getRedirectCode();
+			effective.redirectTarget = location->getRedirectTarget();
+		}
+	}
+	return effective;
+}
+
 /**
  * Handles an HTTP request and generates an appropriate response.
  * 
@@ -699,26 +731,20 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	std::string srcPath;
 	struct stat fileInfo;
 	const Location *location = config->findLocation(request.getPath());
-	std::string root = config->getRoot(); // Por defecto, el root es el del config, pero si la location tiene un root, lo sobreescribimos.
-	std::string index = config->getIndex(); // Por defecto, el index es el del config, pero si la location tiene un index, lo sobreescribimos.
-	
+	EffectiveConfig effectiveConfig = resolveConfig(config, location);
 	if (location == NULL)
 		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (location != NULL)
 	{
 		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		location->print();
-		if (location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
-			return createRedirectResponse(location->getRedirectCode(), location->getRedirectTarget());
-		if (location->hasRoot()) // Si la location tiene un root, lo sobreescribimos.
-			root = location->getRoot();
-		if (location->hasIndex()) // Si la location tiene un index, lo sobreescribimos.
-			index = location->getIndex();
 	}
+	if (effectiveConfig.hasRedirect) // Si la configuración global o la location tienen un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
+		return createRedirectResponse(effectiveConfig.redirectCode, effectiveConfig.redirectTarget);
 	if (!isMethodAllowed(request, location)) // Si no se permite el método, devolvemos un error 405 Method Not Allowed.
 		throw HTTPException(METHOD_NOT_ALLOWED, false);
-	srcPath = root + request.getPath();
-	std::cout << "ROOT: " << root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	srcPath = effectiveConfig.root + request.getPath();
+	std::cout << "ROOT: " << effectiveConfig.root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::cout << "PATH: " << request.getPath() << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::cout << "SRC: " << srcPath << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
@@ -749,12 +775,12 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 			return createRedirectResponse(MOVED_PERMANENTLY, request.getPath() + "/");
 		else // Si la ruta termina en '/', buscamos el index del directorio y lo devolvemos como respuesta.
 		{
-			srcPath += index;
+			srcPath += effectiveConfig.index; // Añadimos el index al path del directorio para obtener el path completo del fichero index.
 			if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
 			{
 				if (errno == ENOENT) // El archivo index configurado no existe.
 				{
-					if (location != NULL && location->getAutoindex()) // Si la location tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
+					if (effectiveConfig.autoindex) // Si la configuración efectiva tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
 						return createAutoIndexResponse(request.getPath());
 					else
 						throw HTTPException(FORBIDDEN, false); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
@@ -831,7 +857,7 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 bool Server::isMethodAllowed(const HTTPRequest &request, const Location *location)
 {
 	if (location == NULL || !location->hasAllowedMethods()) //Si no se encontró location para la petición o si la location encontrada no tiene metodos definidos, entonces selo admitimos GET por defecto.
-		return (request.getMethod() == GET);
+		return (request.getMethod() == GET); //AQUI HABRA QUE PONER TRUE porque el que un metodo sea aceptado o no depende del metodoy  si se esta aplicando sobre un recurso estatico o no. (Ej: un DE)
 	const std::set<HTTPMethod> &allowedMethods = location->getAllowedMethods(); // SI existen methods definidos en la location, comprobamos si el metodo de la peticion esta en el set de metodos permitidos.
 	return (allowedMethods.find(request.getMethod()) != allowedMethods.end());
 }
@@ -911,8 +937,8 @@ HTTPResponse Server::createDefaultErrorPage(HTTPStatus statusCode)
 
 /**
  *  Creates an HTTP redirect response based on the specified location.
- * 
- * @param location The location object containing the redirect information.
+ * @param statusCode The HTTP status code for the redirect (e.g., 301, 302).
+ * @param redirectTarget The target URL to which the client should be redirected.
  * @return The created HTTP response.
  */
 HTTPResponse Server::createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget)
