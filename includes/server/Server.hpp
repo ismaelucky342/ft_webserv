@@ -30,7 +30,8 @@ private:
 	bool readFromClient(int clientSocket);
 	bool writeToClient(int clientSocket);
 	Client &getClient(int clientSocket);
-	void disconnectClient(int clientSocket);
+	void disconnectClient(size_t index, bool doClose);
+	void disconnectClientByFd(int clientSocketFd, bool doClose);
 	void cleanupDisconnectedClients();
 	void updateClientKeepAlive(Client &client);
 	//Request handling

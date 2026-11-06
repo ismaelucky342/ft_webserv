@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/30 15:32:37 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/06 12:10:12 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,8 @@
 #include "http/HTTPException.hpp"
 #include "server/error.hpp"
 #include "colors.hpp"
-#include "StringUtils.hpp"
+#include "stringUtils.hpp"
+#include "signals.hpp"
 
 /**
  * Constructor for the Server class.
@@ -146,18 +147,19 @@ void Server::initPoll()
  */
 void Server::runLoop()
 {
-	while (true)
+	while (g_running) // Flag global (volatile sig_atomic_t) que pone a 0 el handler de SIGINT.
 	{
 		std::cout << "---- BEFORE POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 		size_t fdsSize = _pollFds.size(); // Guardo el tamaño del vector de pollfd antes de entrar en el bucle, porque si aceptamos un nuevo cliente, el tamaño del vector aumentará y así evitamos recorrer los nuevos elementos añadidos en esta vuelta del bucle, que no tienen eventos pendientes y que podrían causar problemas.
-		int pollCount = poll(_pollFds.data(), fdsSize, -1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito)
-		std::cout << "---- AFTER POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+		int pollCount = poll(_pollFds.data(), fdsSize, 1000); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito, 1000 = 1 segundo). Lo ponemos a 1 segundo para que el poll no se quede bloqueado indefinidamente y podamos salir del bucle si g_running se pone a 0 (SIGINT), además de para poder revisar timeouts de clientes.
 		std::cout << "poll() returned " << pollCount << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 
 		if (pollCount == -1)
 		{
+			if (!g_running)
+				break; // Si g_running es 0, significa que hemos recibido un SIGINT y debemos salir del bucle.
 			std::cerr << "Error in poll()" << std::endl;
 			continue;
 		}
@@ -167,38 +169,116 @@ void Server::runLoop()
 			if (pfd.fd == -1 || pfd.revents == 0) // Si el fd es -1, significa que es un elemento inválido (ya no lo estamos escuchando). Si revents es 0, significa que no hay eventos pendientes en este fd. En ambos casos, pasamos al siguiente elemento.
 				continue;
 			ServerSocket *serverSocket = getServerSocketByFd(pfd.fd);
-			if (serverSocket != NULL) //Si el elemento es uno de los sockets de servidor, entonces es una nueva conexion entrante y tenemos que aceptarla. Si no es un socket de servidor, entonces es un socket de cliente y tenemos que leer o escribir en el.
+			// 1. POLLNVAL: el fd ya no existe, no hay que hacer close().
+			if (pfd.revents & POLLNVAL)
 			{
-				if (pfd.revents & POLLIN) // Si el elemento es el propio servidor y tiene un evento pendiente (revents != 0) y ese evento es POLLIN (una nueva conexión entrante). EL & es un and bit a bit, porque el revent se maneja por bits para cada tipo de evento. Si el revent tiene el bit de POLLIN activado, significa que hay datos para leer o una nueva conexión entrante. Por eso se hace en & con el bit del POLLIN que nos asegura que, al menos el bit del POLLIN esta activo.
-				{
-					acceptClient(*serverSocket);
-					continue;
-				}
-			}
-			if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) // Si en el socket que estamos atendiendo hay un error (POLLERR), el socket se ha cerrado (POLLHUP) o el descriptor de archivo no es válido (POLLNVAL)...
-			{
-				if (serverSocket != NULL) // Si el error ocurre en un socket de servidor, significa que hay un problema con el socket de escucha del servidor. Esto es crítico porque el servidor no podrá aceptar nuevas conexiones. En este caso, lanzamos una runtime_error para indicar que hay un error en el socket, esta llegaria al main y saldriamos del programa.
-					throw std::runtime_error("Error on listening socket");
-				disconnectClient(pfd.fd); // Si el error ocurre en un socket de cliente, desconectamos al cliente y seguimos con el bucle. Esto es importante porque si no hacemos esto, el poll se quedaria bloqueado esperando a que ocurra un evento en ese socket que ya no es valido y el servidor se quedaria colgado.
+				if (serverSocket != NULL) // Si el error ocurre en un socket de escucha.
+					throw std::runtime_error("Listening socket is POLLNVAL");
+				std::cerr << "POLLNVAL on fd " << pfd.fd << std::endl; // Indica un bug nuestro, como por ejemplo, un socket que se ha cerrado pero aún está en el vector de poll.
+				disconnectClient(i, false);
 				continue;
 			}
+			// 2. Sockets de escucha.
+			if (serverSocket != NULL) //Si el elemento es uno de los sockets de servidor ( tambien llamado socket de escucha), entonces es una nueva conexion entrante y tenemos que aceptarla. Si no es un socket de servidor, entonces es un socket de cliente y tenemos que leer o escribir en el.
+			{
+				if (pfd.revents & POLLIN) // Si el elemento es el propio servidor y tiene un evento pendiente (revents != 0) y ese evento es POLLIN (una nueva conexión entrante). EL & es un and bit a bit, porque el revent se maneja por bits para cada tipo de evento. Si el revent tiene el bit de POLLIN activado, significa que hay datos para leer o una nueva conexión entrante. Por eso se hace en & con el bit del POLLIN que nos asegura que, al menos el bit del POLLIN esta activo.
+					acceptClient(*serverSocket);
+				else if (pfd.revents & (POLLERR | POLLHUP)) // Si el error ocurre en un socket de servidor, significa que hay un problema con el socket de escucha del servidor. Esto es crítico porque el servidor no podrá aceptar nuevas conexiones. En este caso, lanzamos una runtime_error para indicar que hay un error en el socket, esta llegaria al main y saldriamos del programa.
+					throw std::runtime_error("Error on listening socket");
+				continue;
+			}
+			// 3. Error en cliente: no hay nada que rescatar.
+			if (pfd.revents & POLLERR)
+			{
+				disconnectClient(i, true);
+				continue;
+			}
+
+			// 4. Lectura. Se hace antes de mirar POLLHUP por si quedan datos pendientes.
 			if (pfd.revents & POLLIN) //  El socket del cliente tiene datos disponibles para ser leídos mediante recv().
 			{
 				if (!readFromClient(pfd.fd))
 				{
-					disconnectClient(pfd.fd);
+					disconnectClient(i, true);
 					continue;
 				}
 			}
-			if (pfd.revents & POLLOUT) // El socket está listo para enviar datos al cliente mediante send().
+			// 5. POLLHUP en un socket de cliente: ya no podemos responderle.
+			if (pfd.revents & POLLHUP)
+			{
+				disconnectClient(i, true);
+				continue;
+			}
+			// 6. Escritura (solo llega si el cliente sigue vivo).
+			if (pfd.revents & POLLOUT)
 			{
 				if (!writeToClient(pfd.fd))
-					disconnectClient(pfd.fd);
+					disconnectClient(i, true);
 			}
 		}
+		// checkClientTimeouts();        // Opcional: desconecta clientes inactivos (usa removeClient).
 		cleanupDisconnectedClients(); // Limpiamos los clientes desconectados del vector de pollfd (marcados con -1) para no seguir escuchando en ellos. No se eliminan en el momento del problema para no tener problemas de indices en el recorrido del vector de pollfd. Se hace al final de la vuelta del bucle para que no afecte a la iteración actual.
 	}
 }
+
+// /**
+//  * Main loop of the server that waits for events on the monitored file descriptors and handles them accordingly.
+//  */
+// void Server::runLoop()
+// {
+// 	while (true)
+// 	{
+// 		std::cout << "---- BEFORE POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+// 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
+// 		size_t fdsSize = _pollFds.size(); // Guardo el tamaño del vector de pollfd antes de entrar en el bucle, porque si aceptamos un nuevo cliente, el tamaño del vector aumentará y así evitamos recorrer los nuevos elementos añadidos en esta vuelta del bucle, que no tienen eventos pendientes y que podrían causar problemas.
+// 		int pollCount = poll(_pollFds.data(), fdsSize, -1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito)
+// 		std::cout << "---- AFTER POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+// 		std::cout << "poll() returned " << pollCount << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+// 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
+
+// 		if (pollCount == -1)
+// 		{
+// 			std::cerr << "Error in poll()" << std::endl;
+// 			continue;
+// 		}
+// 		for (size_t i = 0; i < fdsSize; ++i) //Cuando ocurre un evento en cualquiera de los elementos en los que esta escuchando el poll, se sale y tenemos que recorrerlos con el bucle pasando por todos (incluso los que no tienen eventos activos en su revent.)
+// 		{
+// 			struct pollfd pfd = _pollFds[i]; // Hacemos copia local para evitar problemas de invalidacion de referencias (cuando un vector crece, puede mover toda la info a un nuevo bloque y esto invalida los punteros y referencias.) Estp puede ocurrir al aceptar nuevos clientes y añadirlos al vector. La copia local hace que como no tenemos que modificar nada de esa copia, nos evite el rpblema de la referencia.
+// 			if (pfd.fd == -1 || pfd.revents == 0) // Si el fd es -1, significa que es un elemento inválido (ya no lo estamos escuchando). Si revents es 0, significa que no hay eventos pendientes en este fd. En ambos casos, pasamos al siguiente elemento.
+// 				continue;
+// 			ServerSocket *serverSocket = getServerSocketByFd(pfd.fd);
+// 			if (serverSocket != NULL) //Si el elemento es uno de los sockets de servidor, entonces es una nueva conexion entrante y tenemos que aceptarla. Si no es un socket de servidor, entonces es un socket de cliente y tenemos que leer o escribir en el.
+// 			{
+// 				if (pfd.revents & POLLIN) // Si el elemento es el propio servidor y tiene un evento pendiente (revents != 0) y ese evento es POLLIN (una nueva conexión entrante). EL & es un and bit a bit, porque el revent se maneja por bits para cada tipo de evento. Si el revent tiene el bit de POLLIN activado, significa que hay datos para leer o una nueva conexión entrante. Por eso se hace en & con el bit del POLLIN que nos asegura que, al menos el bit del POLLIN esta activo.
+// 				{
+// 					acceptClient(*serverSocket);
+// 					continue;
+// 				}
+// 			}
+// 			if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) // Si en el socket que estamos atendiendo hay un error (POLLERR), el socket se ha cerrado (POLLHUP) o el descriptor de archivo no es válido (POLLNVAL)...
+// 			{
+// 				if (serverSocket != NULL) // Si el error ocurre en un socket de servidor, significa que hay un problema con el socket de escucha del servidor. Esto es crítico porque el servidor no podrá aceptar nuevas conexiones. En este caso, lanzamos una runtime_error para indicar que hay un error en el socket, esta llegaria al main y saldriamos del programa.
+// 					throw std::runtime_error("Error on listening socket");
+// 				disconnectClient(pfd.fd); // Si el error ocurre en un socket de cliente, desconectamos al cliente y seguimos con el bucle. Esto es importante porque si no hacemos esto, el poll se quedaria bloqueado esperando a que ocurra un evento en ese socket que ya no es valido y el servidor se quedaria colgado.
+// 				continue;
+// 			}
+// 			if (pfd.revents & POLLIN) //  El socket del cliente tiene datos disponibles para ser leídos mediante recv().
+// 			{
+// 				if (!readFromClient(pfd.fd))
+// 				{
+// 					disconnectClient(pfd.fd);
+// 					continue;
+// 				}
+// 			}
+// 			if (pfd.revents & POLLOUT) // El socket está listo para enviar datos al cliente mediante send().
+// 			{
+// 				if (!writeToClient(pfd.fd))
+// 					disconnectClient(pfd.fd);
+// 			}
+// 		}
+// 		cleanupDisconnectedClients(); // Limpiamos los clientes desconectados del vector de pollfd (marcados con -1) para no seguir escuchando en ellos. No se eliminan en el momento del problema para no tener problemas de indices en el recorrido del vector de pollfd. Se hace al final de la vuelta del bucle para que no afecte a la iteración actual.
+// 	}
+// }
 
 /**
  * Sets the event for a client socket in the poll structure.
@@ -364,24 +444,39 @@ Client &Server::getClient(int clientSocket)
 }
 
 /**
- * Disconnects a client from the server, closing the socket and removing it from the poll structure.
+ * Disconnects a client from the server by its index in the poll structure, closing the socket and removing it from the poll structure.
  * 
- * @param clientSocket The socket connected to the client.
+ * @param index The index of the client in the poll structure.
+ * @param doClose Whether to close the socket.
  */
-void Server::disconnectClient(int clientSocket)
+void Server::disconnectClient(size_t index, bool doClose)
 {
-	close(clientSocket); // Cerramos el socket del cliente.
+	int fd = _pollFds[index].fd;
+	if (fd == -1)
+		return; // Ya eliminado
+	if (doClose)
+		close(fd);
+	_pollFds[index].fd = -1;
+	_clients.erase(fd);
+	std::cout << "Client disconnected." << std::endl;
+}
+
+/**
+ * Disconnects a client from the server by its file descriptor, closing the socket and removing it from the poll structure.
+ * 
+ * @param clientSocketFd The file descriptor of the client socket.
+ * @param doClose Whether to close the socket.
+ */
+void Server::disconnectClientByFd(int clientSocketFd, bool doClose)
+{
 	for (size_t i = 0; i < _pollFds.size(); ++i)
 	{
-		if (_pollFds[i].fd == clientSocket)
+		if (_pollFds[i].fd == clientSocketFd)
 		{
-			_pollFds[i].fd = -1; // Marcamos el fd como inválido para que el poll ignore este elemento en la siguiente vuelta. Si lo borramos aqui del vector con erase perderiamos los indices y podriamos saltarnos descriptores o incluso leer fuera de memoria.
-			// _pollFds.erase(_pollFds.begin() + i);
-			break;
+			disconnectClient(i, doClose);
+			return;
 		}
 	}
-	_clients.erase(clientSocket); // Esto si que lo podemos borrar y, ya que lo damos por cerrado y no lo vamos a utilizar
-	std::cout << "Client disconnected." << std::endl;
 }
 
 /**
@@ -504,7 +599,7 @@ bool Server::processChunkedBody(Client &client, const Config *config, const size
 
 	if (client.getRequest().hasHeader("Content-Length")) //No se aceptan transfer-encoding y content-length a la vez, porque es una contradicción. Si el cliente envia ambos headers, devolvemos un error 400 Bad Request.
 		throw HTTPException(BAD_REQUEST, true);
-	std::string transferEncoding = StringUtils::toLowerString(client.getRequest().getHeader("Transfer-Encoding")); //Obtenemos el valor del header Transfer-Encoding y lo pasamos a minúsculas para poder compararlo con "chunked". Porque HTTP en la codificacion no diferencia entre mayusculas y minusculas en el tipo de la codificación de transferencia. Chunked sería tan válido como CHUNKED o Chunked.
+	std::string transferEncoding = stringUtils::toLowerString(client.getRequest().getHeader("Transfer-Encoding")); //Obtenemos el valor del header Transfer-Encoding y lo pasamos a minúsculas para poder compararlo con "chunked". Porque HTTP en la codificacion no diferencia entre mayusculas y minusculas en el tipo de la codificación de transferencia. Chunked sería tan válido como CHUNKED o Chunked.
 	if (transferEncoding != "chunked")
 		throw HTTPException(NOT_IMPLEMENTED, true);
 	if (!parser.parseChunkedBody(client.getRecvBuffer(), headersEnd, config->getClientMaxBodySize(), requestEnd, body)) //Parseamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
@@ -530,7 +625,7 @@ bool Server::processContentLengthBody(Client &client, const Config *config, cons
 	size_t contentLength = 0;
 	std::string value = client.getRequest().getHeader("Content-Length");
 
-	if (!StringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength.
+	if (!stringUtils::parseSizeT(value, contentLength)) //Parseamos el Content-Length de la peticion y lo guardamos en contentLength.
 		throw HTTPException(BAD_REQUEST, true); // Si no se puede parsear el Content-Length porque tiene un formato incorrecto para un size_t, devolvemos un error 400 Bad Request.
 	if (config->getClientMaxBodySize() != 0 && contentLength > config->getClientMaxBodySize()) //Si el Content-Length de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
 		throw HTTPException(CONTENT_TOO_LARGE, true);
