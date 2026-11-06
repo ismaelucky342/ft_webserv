@@ -1,30 +1,22 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   StringUtils.hpp                                    :+:      :+:    :+:   */
+/*   signals.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/10/09 14:41:53 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/21 16:56:18 by mvidal-h         ###   ########.fr       */
+/*   Created: 2026/11/06 10:43:57 by mvidal-h          #+#    #+#             */
+/*   Updated: 2026/11/06 11:09:45 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef STRINGUTILS_HPP
-#define STRINGUTILS_HPP
+#ifndef SIGNALS_HPP
+# define SIGNALS_HPP
 
-#include <string>
-#include <algorithm>
-#include <cstddef>
-#include <stdexcept>
+# include <csignal>
 
-namespace StringUtils
-{
-	char toLowerChar(char c);
-	std::string toLowerString(const std::string &str);
+extern volatile sig_atomic_t g_running;
 
-	bool parseSizeT(const std::string &str, size_t &result, const int &base = 10);
-	long parseLong(const std::string &str);
-}
+void setupSignals();
 
 #endif

@@ -3,6 +3,7 @@
 #include "config/ConfigParser.hpp"
 #include <iostream>
 #include "colors.hpp"
+#include "signals.hpp"
 
 int main(int argc, char **argv)
 {
@@ -11,6 +12,7 @@ int main(int argc, char **argv)
 		std::cerr << BOLD_RED << "Usage: " << argv[0] << " <config_file>" << RESET << std::endl;
 		return 1;
 	}
+	setupSignals(); // Configuramos las señales para poder cerrar el servidor de forma segura.
 	try
 	{
 		ConfigParser configParser;

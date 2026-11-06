@@ -6,14 +6,14 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/07 14:54:36 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/14 17:52:07 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/06 11:52:51 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "http/HTTPRequest.hpp"
 #include <iostream>
 #include "colors.hpp"
-#include "StringUtils.hpp"
+#include "stringUtils.hpp"
 
 /**
  * Default constructor for the HTTPRequest class.
@@ -135,7 +135,7 @@ const std::map<std::string, std::string> &HTTPRequest::getHeaders() const
  */
 bool HTTPRequest::hasHeader(const std::string &key) const
 {
-	return _headers.find(StringUtils::toLowerString(key)) != _headers.end();
+	return _headers.find(stringUtils::toLowerString(key)) != _headers.end();
 }
 
 /**
@@ -146,7 +146,7 @@ bool HTTPRequest::hasHeader(const std::string &key) const
  */
 const std::string HTTPRequest::getHeader(const std::string &key) const
 {
-	std::map<std::string, std::string>::const_iterator it = _headers.find(StringUtils::toLowerString(key));
+	std::map<std::string, std::string>::const_iterator it = _headers.find(stringUtils::toLowerString(key));
 	if (it != _headers.end())
 		return it->second;
 	return std::string(); // Return an empty string if the header is not found

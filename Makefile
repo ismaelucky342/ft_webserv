@@ -1,7 +1,7 @@
 NAME		=	webserv
 
 CC			=	c++
-CPPFLAGS	=	-Wall -Werror -Wextra -std=c++98
+CPPFLAGS	=	-Wall -Werror -Wextra -std=c++98 -g -fsanitize=address
 
 # directories
 SRC_DIR		=	srcs/
@@ -19,7 +19,8 @@ CUT			=	\033[K
 
 #source files
 SRC_FILES	=	main.cpp \
-				StringUtils.cpp \
+				stringUtils.cpp \
+				signals.cpp \
 				server/Server.cpp \
 				server/ServerSocket.cpp \
 				server/Client.cpp \

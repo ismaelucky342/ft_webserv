@@ -4,7 +4,7 @@
 #include "colors.hpp"
 #include "http/HTTPException.hpp"
 #include "http/HTTPStatus.hpp"
-#include "StringUtils.hpp"
+#include "stringUtils.hpp"
 #include "limits"
 
 /**
@@ -118,7 +118,7 @@ void HTTPRequestParser::parseHeaders(HTTPRequest &request, const std::string &ra
 			headerLine.erase(headerLine.size() - 1); //erase elimina el caracter en la posicion indicada, que es la ultima posicion del string.
 
 		parseHeaderLine(headerLine, key, value); //IMPORTANTE hacer la comprobacion de headers repetidas
-		request.setHeader(StringUtils::toLowerString(key), value);
+		request.setHeader(stringUtils::toLowerString(key), value);
 	}
 	request.setHeadersParsed(true); // Marcamos que los headers han sido parseados correctamente.
 }
@@ -243,7 +243,7 @@ size_t HTTPRequestParser::getChunkedRequestEnd(const std::string &buffer, size_t
 			return std::string::npos;
 		std::string chunkSizeStr = buffer.substr(pos, lineEnd - pos);
 		size_t chunkSize = 0;
-		if (!StringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
+		if (!stringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
 			throw HTTPException(BAD_REQUEST, true);
 		pos = lineEnd + 2;
 		if (chunkSize == 0) // Si el tamaño del chunk es 0, significa que hemos llegado al final del body chunked, por lo que devolvemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente.
@@ -284,7 +284,7 @@ std::string HTTPRequestParser::cleanChunkedBody(const std::string& rawBody)
 			throw HTTPException(BAD_REQUEST, true);
 		std::string chunkSizeStr = rawBody.substr(pos, lineEnd - pos);
 		size_t chunkSize = 0;
-		if (!StringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
+		if (!stringUtils::parseSizeT(chunkSizeStr, chunkSize, 16)) //Parseamos el tamaño del chunk en hexadecimal. Si no se puede parsear, lanzamos una excepción
 			throw HTTPException(BAD_REQUEST, true);
 		if (chunkSize == 0) // Si el tamaño del chunk es 0, significa que hemos llegado al final del body chunked.
 			break;

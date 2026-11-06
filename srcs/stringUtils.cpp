@@ -1,16 +1,16 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   StringUtils.cpp                                    :+:      :+:    :+:   */
+/*   stringUtils.cpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/09 14:46:23 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/21 18:25:24 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/06 11:54:41 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "StringUtils.hpp"
+#include "stringUtils.hpp"
 #include <cctype> // for std::tolower
 #include <limits>
 
@@ -21,7 +21,7 @@
  * 
  * Returns the lowercase version of the character.
  */
-char StringUtils::toLowerChar(char c)
+char stringUtils::toLowerChar(char c)
 {
 	return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 }
@@ -33,10 +33,10 @@ char StringUtils::toLowerChar(char c)
  * 
  * Returns the lowercase version of the string.
  */
-std::string StringUtils::toLowerString(const std::string &str)
+std::string stringUtils::toLowerString(const std::string &str)
 {
 	std::string lowerStr = str;
-	std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), StringUtils::toLowerChar);
+	std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), stringUtils::toLowerChar);
 	return lowerStr;
 }
 
@@ -49,7 +49,7 @@ std::string StringUtils::toLowerString(const std::string &str)
  * base: The base to use for parsing (default is 10).
  * Returns true if parsing was successful, false otherwise.
  */
-bool StringUtils::parseSizeT(const std::string &str, size_t &result, const int &base)
+bool stringUtils::parseSizeT(const std::string &str, size_t &result, const int &base)
 {
 	if (str.empty())
 		return false;
@@ -69,7 +69,7 @@ bool StringUtils::parseSizeT(const std::string &str, size_t &result, const int &
 		if (std::isdigit(static_cast<unsigned char>(str[i])))
 			digit = str[i] - '0';
 		else
-			digit = StringUtils::toLowerChar(static_cast<unsigned char>(str[i])) - 'a' + 10; // +10 porque 'a' representa 10 en hexadecimal
+			digit = stringUtils::toLowerChar(static_cast<unsigned char>(str[i])) - 'a' + 10; // +10 porque 'a' representa 10 en hexadecimal
 		if (value > (maxValue - digit) / base) // value × base + digit <= maxValue ---> despejando value:  value > (maxValue - digit) / base
 			return false;
 
@@ -87,7 +87,7 @@ bool StringUtils::parseSizeT(const std::string &str, size_t &result, const int &
  * Returns the parsed long value.
  * Throws std::runtime_error if the string is not a valid number.
  */
-long StringUtils::parseLong(const std::string &str)
+long stringUtils::parseLong(const std::string &str)
 {
 	char *end;
 	long value = std::strtol(
