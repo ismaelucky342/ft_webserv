@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/10 15:21:17 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/10 17:13:47 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,7 +21,7 @@
  * @param serverSocket The server socket to which the client is connected.
  */
 Client::Client(int clientFd, ServerSocket &serverSocket)
-	: _fd(clientFd), _serverSocket(serverSocket), _keepAlive(false), _bytesSent(0)
+	: _fd(clientFd), _serverSocket(serverSocket), _keepAlive(false), _lastActivity(time(NULL)), _bytesSent(0)
 {
 	std::cout << BOLD_GREEN << "Client constructor called " << this << RESET << std::endl;
 }
@@ -33,7 +33,7 @@ Client::Client(int clientFd, ServerSocket &serverSocket)
  */
 Client::Client(const Client &other)
 	: _fd(other._fd), _serverSocket(other._serverSocket), _recvBuffer(other._recvBuffer), _keepAlive(other._keepAlive),
-	  _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent), _request(other._request)
+	  _lastActivity(other._lastActivity), _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent), _request(other._request)
 {
 	std::cout << BOLD_GREEN << "Client copy constructor called " << this << " from " << &other << RESET << std::endl;
 }
@@ -51,6 +51,7 @@ Client &Client::operator=(const Client &other)
 		_fd = other._fd;
 		_serverSocket = other._serverSocket;
 		_recvBuffer = other._recvBuffer;
+		_lastActivity = other._lastActivity;
 		_sendBuffer = other._sendBuffer;
 		_bytesSent = other._bytesSent;
 		_keepAlive = other._keepAlive;

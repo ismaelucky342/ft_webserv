@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/10 13:38:33 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/10 17:21:57 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -382,6 +382,7 @@ bool Server::readFromClient(int clientSocket)
 		std::cerr << "Error receiving data from client." << std::endl;
 		return false;
 	}
+	client.setLastActivity(time(NULL)); // Actualizamos el tiempo de la última actividad del cliente para poder manejar timeouts de clientes inactivos.
 	std::cout << "Request received: "; std::cout.write(buffer, bytes); std::cout << std::endl; //Linea para mostrar por pantalla la peticion y poder entenderla. IMP: luego podemos quitarla.
 	client.getRecvBuffer().append(buffer, bytes); //Añadimos lo que hemos leido al buffer de recepcion del cliente. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 
@@ -409,6 +410,7 @@ bool Server::writeToClient(int clientSocket)
 		std::cerr << "Error sending data to client." << std::endl;
 		return false;
 	}
+	client.setLastActivity(time(NULL)); // Actualizamos el tiempo de la última actividad del cliente para poder manejar timeouts de clientes inactivos.
 	client.addBytesSent(bytesSent);
 	std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client." << std::endl;
 	//Si la respuesta no se ha enviado completamente, salimos y esperamos a que el socket del cliente esté listo para enviar más datos.
