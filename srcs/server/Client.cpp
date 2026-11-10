@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/16 15:16:30 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/10 15:21:17 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -149,6 +149,16 @@ bool Client::isKeepAlive() const
 }
 
 /**
+ * Get the last activity time for the client.
+ * 
+ * @return The last activity time.
+ */
+time_t Client::getLastActivity() const
+{
+	return _lastActivity;
+}
+
+/**
  * Get the HTTPRequest object for the client.
  * 
  * @return A reference to the HTTPRequest object.
@@ -176,6 +186,16 @@ const HTTPRequest &Client::getRequest() const
 void Client::setKeepAlive(bool keepAlive)
 {
 	_keepAlive = keepAlive;
+}
+
+/**
+ * Set the last activity time for the client.
+ * 
+ * @param lastActivity The last activity time.
+ */
+void Client::setLastActivity(time_t lastActivity)
+{
+	_lastActivity = lastActivity;
 }
 
 /**
