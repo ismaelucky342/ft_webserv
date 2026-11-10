@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/06 16:17:43 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/10 13:38:33 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -961,9 +961,18 @@ HTTPResponse Server::createRedirectResponse(HTTPStatus statusCode, const std::st
 HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
 {
 	std::ostringstream bodystream;
-	bodystream << "<html><head><title>Index of " << requestPath << "</title></head><body>";
+	bodystream << "<html><head>"
+               << "<title>Index of " << requestPath << "</title>"
+               << "</head><body>"
+               << "<h1>Index of " << requestPath << "</h1>"
+               << "<hr><ul>"
+               << "<li><a href=\"file1.txt\">file1.txt</a></li>"
+               << "<li><a href=\"file2.html\">file2.html</a></li>"
+               << "<li><a href=\"images/\">images/</a></li>"
+               << "</ul><hr>"
+               << "</body></html>";
 	std::string body = bodystream.str();
-	return createResponse(OK, "text/plain", body);
+	return createResponse(OK, "text/html", body);
 }
 
 /**
