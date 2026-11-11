@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/11 17:50:42 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/11 18:48:47 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -783,9 +783,9 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	}
 	if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
 	{
-		std::ifstream file_stream(srcPath.c_str());
+		std::ifstream file_stream(srcPath.c_str());//IMPORTANTE: PENSAR SI CAMBIARLO A OPEN READ para poder manejar errores y que no sea un INTERNAL_SERVER_ERROR por no poder comprobar el error a diferencia de con open().
 		if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
-			throw HTTPException(FORBIDDEN, false);
+			throw HTTPException(INTERNAL_SERVER_ERROR, false);
 		else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
 		{
 			std::ostringstream bodystream;
