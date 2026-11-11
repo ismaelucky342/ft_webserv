@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/10 17:21:57 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/11 17:50:42 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,10 +22,11 @@
 #include "server/Server.hpp"
 #include <arpa/inet.h> // inet_ntoa(), inet_ntop(), inet_pton(), inet_addr()
 #include "http/HTTPException.hpp"
-#include "server/error.hpp"
+#include "server/constants.hpp"
 #include "colors.hpp"
 #include "stringUtils.hpp"
 #include "signals.hpp"
+#include "server/constants.hpp"
 
 /**
  * Constructor for the Server class.
@@ -152,7 +153,7 @@ void Server::runLoop()
 		std::cout << "---- BEFORE POLL ----" << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 		size_t fdsSize = _pollFds.size(); // Guardo el tamaño del vector de pollfd antes de entrar en el bucle, porque si aceptamos un nuevo cliente, el tamaño del vector aumentará y así evitamos recorrer los nuevos elementos añadidos en esta vuelta del bucle, que no tienen eventos pendientes y que podrían causar problemas.
-		int pollCount = poll(_pollFds.data(), fdsSize, -1); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito, 1000 = 1 segundo). Lo ponemos a 1 segundo para que el poll no se quede bloqueado indefinidamente y podamos salir del bucle si g_running se pone a 0 (SIGINT), además de para poder revisar timeouts de clientes.
+		int pollCount = poll(_pollFds.data(), fdsSize, POLL_TIMEOUT); //Activamos el Poll para que empiece a escuchar los eventos. Parametros: array de pollfd, número de fds, timeout (-1 = infinito, 1000 = 1 segundo). Lo ponemos a 1 segundo para que el poll no se quede bloqueado indefinidamente y podamos salir del bucle si g_running se pone a 0 (SIGINT), además de para poder revisar timeouts de clientes.
 		std::cout << "poll() returned " << pollCount << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 		printPollFds(); //IMP: PARA DEPURACION BORRAR LUEGO.
 
@@ -216,7 +217,7 @@ void Server::runLoop()
 					disconnectClient(i, true);
 			}
 		}
-		// checkClientTimeouts();        // Opcional: desconecta clientes inactivos (usa removeClient).
+		checkClientTimeouts(); // desconecta clientes inactivos (usa removeClient).
 		cleanupDisconnectedClients(); // Limpiamos los clientes desconectados del vector de pollfd (marcados con -1) para no seguir escuchando en ellos. No se eliminan en el momento del problema para no tener problemas de indices en el recorrido del vector de pollfd. Se hace al final de la vuelta del bucle para que no afecte a la iteración actual.
 	}
 }
@@ -512,6 +513,28 @@ void Server::updateClientKeepAlive(Client &client)
 		client.setKeepAlive(connection == "keep-alive"); // En HTTP/1.0, la conexión no es persistente por defecto, a menos que se indique "Connection: keep-alive".
 	else
 		throw HTTPException(HTTP_VERSION_NOT_SUPPORTED, true); // Si la versión del protocolo no es ni HTTP/1.0 ni HTTP/1.1, lanzamos una excepción indicando que la versión no es soportada.
+}
+
+/**
+ * Checks the timeouts of all connected clients.
+ * If a client has been inactive for longer than the specified timeout, it is disconnected.
+ */
+void Server::checkClientTimeouts()
+{
+	time_t curretTime = time(NULL);
+	std::map<int, Client>::iterator it = _clients.begin();
+	while (it != _clients.end())
+	{
+		if (difftime(curretTime, it->second.getLastActivity()) >= CLIENT_TIMEOUT)
+		{
+			std::cout << "Client timed out." << std::endl;
+			int fd = it->first; // Guardamos el fd del cliente antes de desconectarlo, porque al desconectarlo se borrará del mapa y el iterador it se invalidará.
+			++it; // Incrementamos el iterador antes de desconectar al cliente para evitar invalidar el iterador al borrar el cliente del mapa.
+			disconnectClientByFd(fd, true); 
+		}
+		else
+			++it;
+	}
 }
 
 /**

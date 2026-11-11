@@ -35,6 +35,7 @@ private:
 	void disconnectClientByFd(int clientSocketFd, bool doClose);
 	void cleanupDisconnectedClients();
 	void updateClientKeepAlive(Client &client);
+	void checkClientTimeouts();
 	//Request handling
 	bool processNextRequest(int clientSocket);
 	bool processChunkedBody(Client &client, const Config *config, const size_t &headersEnd, size_t &requestEnd, std::string &body);

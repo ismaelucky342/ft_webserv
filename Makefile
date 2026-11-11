@@ -1,7 +1,7 @@
 NAME		=	webserv
 
 CC			=	c++
-CPPFLAGS	=	-Wall -Werror -Wextra -std=c++98 -g -fsanitize=address
+CPPFLAGS	=	-Wall -Werror -Wextra -std=c++98 #-g -fsanitize=address
 
 # directories
 SRC_DIR		=	srcs/
