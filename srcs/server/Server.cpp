@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/11 18:48:47 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/13 16:54:56 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -104,6 +104,9 @@ Server &Server::operator=(const Server &other)
 Server::~Server()
 {
 	std::cout << BOLD_RED << "Server destructor called" << RESET << std::endl;
+	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+		close(it->first); // Cerramos el socket del cliente antes de eliminar el objeto Client.
+	_clients.clear(); // Limpiamos el map de clientes. No es estrictamente necesario porque el map se destruye al salir del destructor, pero es una buena práctica para dejar claro que estamos liberando recursos.
 }
 
 /**
@@ -346,17 +349,34 @@ void Server::acceptClient(ServerSocket &serverSocket)
 		return;
 	}
 
-	std::cout << "New client connected: " << inet_ntoa(clientAddr.sin_addr) << ":" << ntohs(clientAddr.sin_port) << std::endl; //IMP: Para depuracion y entender mejor. inet_ntoa convierte la dirección IP del cliente de formato binario a formato de cadena legible. ntohs convierte el puerto del cliente de orden de bytes de red a orden de bytes del host para que se pueda mostrar correctamente.
+	// Creamos el objeto Client para el cliente que acabamos de aceptar.
+	Client client(clientSocket, serverSocket);
 
-	struct pollfd
-		clientPoll; //Creamos un nuevo pollfd para el cliente que acabamos de aceptar. Este pollfd nos permitirá escuchar los eventos que ocurran en el socket del cliente, como datos entrantes (POLLIN) o desconexión (POLLHUP).
+	try
+	{
+		// Insertamos una copia del objeto en el mapa.
+		std::pair<std::map<int, Client>::iterator, bool> result = _clients.insert(std::make_pair(clientSocket, client));
+		if (!result.second)
+		{
+			close(clientSocket);
+			return;
+		}
 
-	clientPoll.fd = clientSocket;
-	clientPoll.events = POLLIN; // Wait for incoming data from the client
-	clientPoll.revents = 0;
+		// Creamos el pollfd correspondiente al cliente.
+		struct pollfd clientPoll;
+		clientPoll.fd = clientSocket;
+		clientPoll.events = POLLIN;
+		clientPoll.revents = 0;
 
-	_pollFds.push_back(clientPoll); // lo añadimos en el vector de elementos a escuchar.
-	_clients.insert(std::make_pair(clientSocket, Client(clientSocket, serverSocket))); //AQUI es donde se llama repetidamente a los constructores de copia y operadores de asignación de la clase Client. Cada vez que se acepta un nuevo cliente, se crea un objeto Client temporal con el constructor que toma el descriptor de socket del cliente y una referencia al ServerSocket. Luego, este objeto temporal se inserta en el mapa _clients usando std::make_pair, lo que provoca la copia del objeto Client temporal en el mapa. Esto es lo que causa las llamadas repetidas a los constructores de copia y operadores de asignación de Client.
+		_pollFds.push_back(clientPoll); // lo añadimos en el vector de elementos a escuchar.
+		std::cout << "New client connected: " << inet_ntoa(clientAddr.sin_addr) << ":" << ntohs(clientAddr.sin_port) << std::endl; //IMP: Para depuracion y entender mejor. inet_ntoa convierte la dirección IP del cliente de formato binario a formato de cadena legible. ntohs convierte el puerto del cliente de orden de bytes de red a orden de bytes del host para que se pueda mostrar correctamente.
+	}
+	catch (...)
+	{
+		_clients.erase(clientSocket);
+		close(clientSocket);
+		throw;
+	}
 }
 
 /**
@@ -987,15 +1007,15 @@ HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
 {
 	std::ostringstream bodystream;
 	bodystream << "<html><head>"
-               << "<title>Index of " << requestPath << "</title>"
-               << "</head><body>"
-               << "<h1>Index of " << requestPath << "</h1>"
-               << "<hr><ul>"
-               << "<li><a href=\"file1.txt\">file1.txt</a></li>"
-               << "<li><a href=\"file2.html\">file2.html</a></li>"
-               << "<li><a href=\"images/\">images/</a></li>"
-               << "</ul><hr>"
-               << "</body></html>";
+			   << "<title>Index of " << requestPath << "</title>"
+			   << "</head><body>"
+			   << "<h1>Index of " << requestPath << "</h1>"
+			   << "<hr><ul>"
+			   << "<li><a href=\"file1.txt\">file1.txt</a></li>"
+			   << "<li><a href=\"file2.html\">file2.html</a></li>"
+			   << "<li><a href=\"images/\">images/</a></li>"
+			   << "</ul><hr>"
+			   << "</body></html>";
 	std::string body = bodystream.str();
 	return createResponse(OK, "text/html", body);
 }

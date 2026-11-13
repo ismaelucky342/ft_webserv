@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/28 17:32:16 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/13 16:37:13 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -123,11 +123,22 @@ void ServerSocket::createSocket()
 		exit(EXIT_FAILURE);
 	}
 
+	int opt = 1; // Con opt = 1, estamos habilitando la opción SO_REUSEADDR. Esto permite que el socket pueda ser reutilizado inmediatamente después de cerrarlo, en lugar de esperar a que el sistema operativo libere el puerto, cuando quedan conexiones TCP anteriores en estados como TIME_WAIT. Esto es útil para evitar errores al reiniciar el servidor rápidamente. 
+	if (setsockopt(_serverSocketFd, SOL_SOCKET, SO_REUSEADDR, // setsockopt() es una función que permite configurar opciones específicas para un socket. En este caso, estamos configurando la opción SO_REUSEADDR para permitir que el socket pueda ser reutilizado inmediatamente después de cerrarlo.
+		&opt, sizeof(opt)) == -1)
+	{
+		std::cerr << "Error setting SO_REUSEADDR" << std::endl;
+		close(_serverSocketFd);
+		_serverSocketFd = -1;
+		exit(EXIT_FAILURE);
+	}
+
 	int flags = fcntl(_serverSocketFd, F_GETFL, 0); // Obtenemos los flags actuales del socket para poder modificarlos y poner el socket en modo no bloqueante.
 	if (flags == -1)
 	{
 		std::cerr << "Error getting socket flags" << std::endl;
 		close(_serverSocketFd);
+		_serverSocketFd = -1;
 		exit(EXIT_FAILURE);
 	}
 
@@ -135,6 +146,7 @@ void ServerSocket::createSocket()
 	{
 		std::cerr << "Error setting socket non-blocking" << std::endl;
 		close(_serverSocketFd);
+		_serverSocketFd = -1;
 		exit(EXIT_FAILURE);
 	}
 }
