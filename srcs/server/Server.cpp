@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/13 16:54:56 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/16 15:37:15 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -67,36 +67,36 @@ Server::Server(const std::vector<Config> &configs)
 	}
 }
 
-/**
- * Copy constructor for the Server class.
- * 
- * @param other The Server object to copy from.
- */
-Server::Server(const Server &other)
-	: _serverSockets(other._serverSockets), _pollFds(other._pollFds), _clients(other._clients),
-	  _parser(other._parser)
-{
-	std::cout << BOLD_GREEN << "Server copy constructor called" << RESET << std::endl;
-}
+// /**
+//  * Copy constructor for the Server class.
+//  * 
+//  * @param other The Server object to copy from.
+//  */
+// Server::Server(const Server &other)
+// 	: _serverSockets(other._serverSockets), _pollFds(other._pollFds), _clients(other._clients),
+// 	  _parser(other._parser)
+// {
+// 	std::cout << BOLD_GREEN << "Server copy constructor called" << RESET << std::endl;
+// }
 
-/**
- * Assignment operator for the Server class.
- * 
- * @param other The Server object to assign from.
- * @return A reference to the assigned Server object.
- */
-Server &Server::operator=(const Server &other)
-{
-	if (this != &other)
-	{
-		_serverSockets = other._serverSockets;
-		_pollFds = other._pollFds;
-		_clients = other._clients;
-		_parser = other._parser;
-	}
-	std::cout << BOLD_GREEN << "Server assignment operator called" << RESET << std::endl;
-	return *this;
-}
+// /**
+//  * Assignment operator for the Server class.
+//  * 
+//  * @param other The Server object to assign from.
+//  * @return A reference to the assigned Server object.
+//  */
+// Server &Server::operator=(const Server &other)
+// {
+// 	if (this != &other)
+// 	{
+// 		_serverSockets = other._serverSockets;
+// 		_pollFds = other._pollFds;
+// 		_clients = other._clients;
+// 		_parser = other._parser;
+// 	}
+// 	std::cout << BOLD_GREEN << "Server assignment operator called" << RESET << std::endl;
+// 	return *this;
+// }
 
 /**
  * Destructor for the Server class.

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:14:40 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/10 15:19:14 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/16 15:43:29 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,11 +31,11 @@ private:
 	size_t _bytesSent;
 	HTTPRequest _request; 
 
+	Client &operator=(const Client &other);
 
 public:
 	Client(int clientFd, ServerSocket &serverSocket);
 	Client(const Client &other);
-	Client &operator=(const Client &other);
 	~Client();
 
 	// Getters

@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:34:35 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/13 16:37:13 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/16 16:11:25 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,32 +34,34 @@ ServerSocket::ServerSocket(const Listen &listen)
  * Copy constructor for the ServerSocket class.
  *
  * @param other The ServerSocket object to copy from.
+ * @warning This copy constructor does not duplicate the underlying socket file descriptor or address information. Use with caution.
+ * @warning It is recommended to use this copy constructor only for creating a new ServerSocket object with the same configuration, but not for managing the same socket connection.
  */
 ServerSocket::ServerSocket(const ServerSocket &other)
-	: _listen(other._listen), _configs(other._configs), _defaultConfig(other._defaultConfig), _addrInfo(other._addrInfo), _serverSocketFd(other._serverSocketFd)
+	: _listen(other._listen), _configs(other._configs), _defaultConfig(other._defaultConfig), _addrInfo(NULL), _serverSocketFd(-1)
 {
 	std::cout << BOLD_GREEN << "ServerSocket copy constructor called" << RESET << std::endl;
 }
 
-/**
- * Assignment operator for the ServerSocket class.
- *
- * @param other The ServerSocket object to assign from.
- * @return A reference to the assigned ServerSocket object.
- */
-ServerSocket &ServerSocket::operator=(const ServerSocket &other)
-{
-	if (this != &other)
-	{
-		_listen = other._listen;
-		_configs = other._configs;
-		_defaultConfig = other._defaultConfig;
-		_addrInfo = other._addrInfo;
-		_serverSocketFd = other._serverSocketFd;
-	}
-	std::cout << BOLD_GREEN << "ServerSocket assignment operator called" << RESET << std::endl;
-	return *this;
-}
+// /**
+//  * Assignment operator for the ServerSocket class.
+//  *
+//  * @param other The ServerSocket object to assign from.
+//  * @return A reference to the assigned ServerSocket object.
+//  */
+// ServerSocket &ServerSocket::operator=(const ServerSocket &other)
+// {
+// 	if (this != &other)
+// 	{
+// 		_listen = other._listen;
+// 		_configs = other._configs;
+// 		_defaultConfig = other._defaultConfig;
+// 		_addrInfo = other._addrInfo;
+// 		_serverSocketFd = other._serverSocketFd;
+// 	}
+// 	std::cout << BOLD_GREEN << "ServerSocket assignment operator called" << RESET << std::endl;
+// 	return *this;
+// }
 
 /**
  * Destructor for the ServerSocket class. It closes the server socket to free up resources.

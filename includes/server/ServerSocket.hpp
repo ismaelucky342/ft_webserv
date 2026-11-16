@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/22 15:15:20 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/08/24 16:20:13 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/16 16:20:27 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,6 +24,8 @@ private:
 	struct addrinfo *_addrInfo;
 	int _serverSocketFd;
 
+	ServerSocket &operator=(const ServerSocket &other); //Asignación lo ponemos en privado para que no se pueda usar, ya que no tiene sentido tener dos serversockets con el mismo fd y la misma direccion. Si se quiere duplicar un serversocket hay que crear uno nuevo con el constructor de copia, que no copia el fd ni la direccion, sino que crea un nuevo serversocket con la misma configuracion.
+
 	//Configuration and socket setup
 	void setupAddressInfo();
 	void freeAddressInfo();
@@ -32,9 +34,8 @@ private:
 	void listenSocket();
 
 public:
-	ServerSocket(const Listen &listen);
+	ServerSocket(const Listen &listen); //Lo tenemos en publico porque es necesario para introducirlos en el std::vector<ServerSocket> _serverSockets de server. Aqui no hay problema de usarlo porque el fd y el addrinfo todavía no han sido creados/tienen sus valores por defecto). Pero una vez creado el serversocket no tiene sentido utilizarlo. Tenerlo en cuenta! 
 	ServerSocket(const ServerSocket &other);
-	ServerSocket &operator=(const ServerSocket &other);
 	~ServerSocket();
 
 	//getters

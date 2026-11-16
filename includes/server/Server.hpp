@@ -22,6 +22,9 @@ private:
 	std::map<int, Client> _clients;
 	HTTPRequestParser _parser;
 
+	Server(const Server &other); // Lo ponemos en privado para que no se pueda usar, ya que no tiene sentido tener dos servers con los mismos fds y la misma configuracion. Si se quiere duplicar un server hay que crear uno nuevo con el constructor de copia, que no copia los fds ni la configuracion, sino que crea un nuevo server con la misma configuracion.
+	Server &operator=(const Server &other); // Lo ponemos en privado para que no se pueda usar, ya que no tiene sentido tener dos servers con los mismos fds y la misma configuracion. Si se quiere duplicar un server hay que crear uno nuevo con el constructor de copia, que no copia los fds ni la configuracion, sino que crea un nuevo server con la misma configuracion.
+
 	void initPoll();
 	void runLoop();
 	void setPollEvent(int clientSocket, short events);
@@ -60,8 +63,8 @@ private:
 
 public:
 	Server(const std::vector<Config> &configs);
-	Server(const Server &other);
-	Server &operator=(const Server &other);
+	// Server(const Server &other);
+	// Server &operator=(const Server &other);
 	~Server();
 
 	void start();

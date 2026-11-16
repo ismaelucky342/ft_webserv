@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/10 17:13:47 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/16 16:29:04 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -30,6 +30,8 @@ Client::Client(int clientFd, ServerSocket &serverSocket)
  * Copy constructor for the Client class.
  * 
  * @param other The Client object to copy from.
+ * @warning: ALERT: This copy constructor copies the file descriptor, which can lead to issues if both Client objects try to use or close the same socket. Use with caution.
+ * @warning: It's used to create a new Client object while we add new clients to de clienst map in the Server class. Be careful when using this constructor in other contexts, It can lead to double closing of the same socket. Use the constructor with caution and ensure that the socket is managed properly to avoid resource leaks or undefined behavior.
  */
 Client::Client(const Client &other)
 	: _fd(other._fd), _serverSocket(other._serverSocket), _recvBuffer(other._recvBuffer), _keepAlive(other._keepAlive),
@@ -38,28 +40,28 @@ Client::Client(const Client &other)
 	std::cout << BOLD_GREEN << "Client copy constructor called " << this << " from " << &other << RESET << std::endl;
 }
 
-/**
- * Assignment operator for the Client class.
- * 
- * @param other The Client object to assign from.
- * @return A reference to the assigned Client object.
- */
-Client &Client::operator=(const Client &other)
-{
-	if (this != &other)
-	{
-		_fd = other._fd;
-		_serverSocket = other._serverSocket;
-		_recvBuffer = other._recvBuffer;
-		_lastActivity = other._lastActivity;
-		_sendBuffer = other._sendBuffer;
-		_bytesSent = other._bytesSent;
-		_keepAlive = other._keepAlive;
-		_request = other._request;
-	}
-	std::cout << BOLD_GREEN << "Client assignment operator called" << this << " from " << &other << RESET << std::endl;
-	return *this;
-}
+// /**
+//  * Assignment operator for the Client class.
+//  * 
+//  * @param other The Client object to assign from.
+//  * @return A reference to the assigned Client object.
+//  */
+// Client &Client::operator=(const Client &other)
+// {
+// 	if (this != &other)
+// 	{
+// 		_fd = other._fd;
+// 		_serverSocket = other._serverSocket;
+// 		_recvBuffer = other._recvBuffer;
+// 		_lastActivity = other._lastActivity;
+// 		_sendBuffer = other._sendBuffer;
+// 		_bytesSent = other._bytesSent;
+// 		_keepAlive = other._keepAlive;
+// 		_request = other._request;
+// 	}
+// 	std::cout << BOLD_GREEN << "Client assignment operator called" << this << " from " << &other << RESET << std::endl;
+// 	return *this;
+// }
 
 /**
  * Destructor for the Client class.
