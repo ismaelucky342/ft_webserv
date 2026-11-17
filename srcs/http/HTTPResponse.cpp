@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/10 12:50:27 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/05 13:01:02 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/17 10:52:14 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -157,6 +157,20 @@ std::string HTTPResponse::serialize() const
 	serializedResponse += serializeHeaders();
 	serializedResponse += "\r\n"; // Blank line to separate headers from body
 	serializedResponse += _body;
+	return serializedResponse;
+}
+
+/**
+ * Serializes an HTTP response into a string without the body.
+ * 
+ * @return The serialized string representing the HTTP response without the body. It is useful when we send response from a file, because we don't want to load the entire file into memory, we just want to send the headers and then send the file in chunks.
+ */
+std::string HTTPResponse::serializeWithoutBody() const
+{
+	std::string serializedResponse;
+	serializedResponse += serializeStatusLine();
+	serializedResponse += serializeHeaders();
+	serializedResponse += "\r\n"; // Blank line to separate headers from body
 	return serializedResponse;
 }
 

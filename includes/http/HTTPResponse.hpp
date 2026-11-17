@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/10 12:20:07 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/05 12:58:32 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/17 10:48:40 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,6 +35,7 @@ public:
 	void setBody(const std::string &newBody);
 
 	std::string serialize() const;
+	std::string serializeWithoutBody() const;
 
 private:
 	HTTPStatus _statusCode;
