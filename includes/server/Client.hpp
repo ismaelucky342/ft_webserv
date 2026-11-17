@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:14:40 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/16 15:43:29 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/16 19:18:41 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@
 #include <string>
 #include "http/HTTPRequest.hpp"
 #include "server/ServerSocket.hpp"
+#include <unistd.h> // close()
 
 class Client
 {
@@ -29,7 +30,9 @@ private:
 	//Para una petición concreta.
 	std::string _sendBuffer;
 	size_t _bytesSent;
-	HTTPRequest _request; 
+	int _fileFd; // Descriptor del archivo que se está enviando al cliente, si es que se está enviando un archivo.
+	size_t _fileBytesRemaining; // Cantidad de bytes restantes por enviar del archivo que se está enviando al cliente, si es que se está enviando un archivo.
+	HTTPRequest _request;
 
 	Client &operator=(const Client &other);
 
@@ -50,6 +53,9 @@ public:
 
 	size_t getBytesSent() const;
 
+	int getFileFd() const;
+	size_t getFileBytesRemaining() const;
+
 	bool isKeepAlive() const;
 
 	time_t getLastActivity() const;
@@ -64,11 +70,18 @@ public:
 	void addBytesSent(size_t bytes);
 	void resetBytesSent();
 
+	void subtractFileBytesRemaining(size_t bytes);
+
 	void clearRecvBuffer();
 	void clearSendBuffer();
 	void clearRequest();
 
 	void reset();
+
+	// Gestión del envío de archivos.
+	bool isSendingFile() const;
+	void setFile(int fileFd, size_t fileSize);
+	void closeFile();
 };
 
 #endif

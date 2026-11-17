@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/16 16:29:04 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/16 19:19:27 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,7 +21,8 @@
  * @param serverSocket The server socket to which the client is connected.
  */
 Client::Client(int clientFd, ServerSocket &serverSocket)
-	: _fd(clientFd), _serverSocket(serverSocket), _keepAlive(false), _lastActivity(time(NULL)), _bytesSent(0)
+	: _fd(clientFd), _serverSocket(serverSocket), _keepAlive(false), _lastActivity(time(NULL)),
+		_bytesSent(0), _fileFd(-1), _fileBytesRemaining(0)
 {
 	std::cout << BOLD_GREEN << "Client constructor called " << this << RESET << std::endl;
 }
@@ -35,7 +36,8 @@ Client::Client(int clientFd, ServerSocket &serverSocket)
  */
 Client::Client(const Client &other)
 	: _fd(other._fd), _serverSocket(other._serverSocket), _recvBuffer(other._recvBuffer), _keepAlive(other._keepAlive),
-	  _lastActivity(other._lastActivity), _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent), _request(other._request)
+	  _lastActivity(other._lastActivity), _sendBuffer(other._sendBuffer), _bytesSent(other._bytesSent),
+	   _fileFd(other._fileFd), _fileBytesRemaining(other._fileBytesRemaining), _request(other._request)
 {
 	std::cout << BOLD_GREEN << "Client copy constructor called " << this << " from " << &other << RESET << std::endl;
 }
@@ -142,6 +144,26 @@ size_t Client::getBytesSent() const
 }
 
 /**
+ * Get the file descriptor for the file being sent to the client.
+ * 
+ * @return The file descriptor for the file being sent to the client.
+ */
+int Client::getFileFd() const
+{
+	return _fileFd;
+}
+
+/**
+ * Get the number of bytes remaining to be sent for the file being sent to the client.
+ * 
+ * @return The number of bytes remaining to be sent for the file being sent to the client.
+ */
+size_t Client::getFileBytesRemaining() const
+{
+	return _fileBytesRemaining;
+}
+
+/**
  * Check if the client connection should be kept alive.
  * 
  * @return True if the connection should be kept alive, false otherwise.
@@ -220,6 +242,18 @@ void Client::resetBytesSent()
 }
 
 /**
+ * Subtract bytes from the count of bytes remaining to be sent for the file being sent to the client.
+ * 
+ * @param bytes The number of bytes to subtract.
+ */
+void Client::subtractFileBytesRemaining(size_t bytes)
+{
+	if (_fileBytesRemaining >= bytes)
+		_fileBytesRemaining -= bytes;
+	else
+		_fileBytesRemaining = 0;
+}
+/**
  * Clear the receive buffer for the client.
  */
 void Client::clearRecvBuffer()
@@ -245,10 +279,48 @@ void Client::clearRequest()
 
 /**
  * Reset the client state, Only the attributes referring to the current request/response.
+ * It restarts the state of a client when a request has been fully processed and the connection is still alive, so that it can be ready to process a new request.
+ * It does not reset the file descriptor, server socket reference, or keep-alive status, as those are associated with the client connection itself and should persist across multiple requests.
  */
 void Client::reset()
 {
+	closeFile();
 	clearSendBuffer();
 	resetBytesSent();
 	clearRequest();
+}
+
+/**
+ * Check if the client is currently sending a file.
+ * 
+ * @return True if the client is sending a file, false otherwise.
+ */
+bool Client::isSendingFile() const
+{
+	return _fileFd != -1;
+}
+
+/**
+ * Set the file descriptor and size for the file being sent to the client.
+ * 
+ * @param fileFd The file descriptor of the file.
+ * @param fileSize The size of the file in bytes.
+ */
+void Client::setFile(int fileFd, size_t fileSize)
+{
+	_fileFd = fileFd;
+	_fileBytesRemaining = fileSize;
+}
+
+/**
+ * Close the file being sent to the client.
+ */
+void Client::closeFile()
+{
+	if (_fileFd != -1)
+	{
+		close(_fileFd);
+		_fileFd = -1;
+	}
+	_fileBytesRemaining = 0;
 }
