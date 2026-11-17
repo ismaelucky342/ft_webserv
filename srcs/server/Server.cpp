@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/16 15:37:15 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/17 14:25:21 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -769,12 +769,17 @@ EffectiveConfig Server::resolveConfig(const Config *config, const Location *loca
  * Handles an HTTP request and generates an appropriate response.
  * 
  * @param request The HTTP request to handle.
+ * @param config The configuration to use for handling the request.
+ * @param fileFd The file descriptor of the file to send, -1 if no file is to be sent.
+ * @param fileSize The size of the file to send, 0 if no file is to be sent.
  * @return The HTTP response to send.
  */
-HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
+HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config, int &fileFd, size_t &fileSize)
 {
 	std::string srcPath;
 	struct stat fileInfo;
+	fileFd = -1;
+	fileSize = 0;
 	const Location *location = config->findLocation(request.getPath());
 	EffectiveConfig effectiveConfig = resolveConfig(config, location);
 	if (location == NULL)
@@ -798,21 +803,12 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 			throw HTTPException(NOT_FOUND, false);
 		if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
 			throw HTTPException(FORBIDDEN, false);
-		else // Si el error es otro, devolvemos un error 500 Internal Server Error.
-			throw HTTPException(INTERNAL_SERVER_ERROR, false);
+		throw HTTPException(INTERNAL_SERVER_ERROR, false); // Si el error es otro, devolvemos un error 500 Internal Server Error.
 	}
-	if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
+	if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, prepararemos la respuesta sin body pero con el fd del fichero abierto para poder enviarlo posteriormente. Esto es importante porque el fichero puede ser muy grande y no queremos cargarlo todo en memoria, sino enviarlo en trozos.
 	{
-		std::ifstream file_stream(srcPath.c_str());//IMPORTANTE: PENSAR SI CAMBIARLO A OPEN READ para poder manejar errores y que no sea un INTERNAL_SERVER_ERROR por no poder comprobar el error a diferencia de con open().
-		if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
-			throw HTTPException(INTERNAL_SERVER_ERROR, false);
-		else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
-		{
-			std::ostringstream bodystream;
-			bodystream << file_stream.rdbuf();
-			std::string body = bodystream.str();
-			return createResponse(OK, getContentType(srcPath), body);
-		}
+		fileSize = static_cast<size_t>(fileInfo.st_size); // Obtenenos de fileInfo el tamaño del fichero y lo guardamos en fileSize para poder generar la cabecera Content-Length de la respuesta sin tener que leer todo el fichero y para posteriormente saber que cantidad del fichero hemos envidado.
+		return createFileResponse(srcPath, fileSize, fileFd); // Creamos la respuesta con el fichero a enviar y devolvemos la respuesta. La función createFileResponse se encargará de abrir el fichero y devolver el file descriptor del mismo en fileFd para poder enviarlo posteriormente.
 	}
 	else if (S_ISDIR(fileInfo.st_mode)) // SI es un directorio,
 	{
@@ -832,21 +828,12 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 				}
 				if (errno == EACCES) // Si el error es que no tenemos permisos para acceder al fichero o directorio, devolvemos un error 403 Forbidden.
 					throw HTTPException(FORBIDDEN, false);
-				else // Si el error es otro, devolvemos un error 500 Internal Server Error.
-					throw HTTPException(INTERNAL_SERVER_ERROR, false);
+				throw HTTPException(INTERNAL_SERVER_ERROR, false); // Si el error es otro, devolvemos un error 500 Internal Server Error.
 			}
-			if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, lo leemos y lo devolvemos como respuesta.
+			if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, prepararemos la respuesta sin body pero con el fd del fichero abierto para poder enviarlo posteriormente. Esto es importante porque el fichero puede ser muy grande y no queremos cargarlo todo en memoria, sino enviarlo en trozos.
 			{
-				std::ifstream file_stream(srcPath.c_str());
-				if (!file_stream.is_open()) // si no puede abrir el fichero devolvemos un error 403 Forbidden. porque si no podemos abrir el fichero, significa que no tenemos permisos para acceder a él y no podemos servir la peticion.
-					throw HTTPException(FORBIDDEN, false);
-				else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
-				{
-					std::ostringstream bodystream;
-					bodystream << file_stream.rdbuf();
-					std::string body = bodystream.str();
-					return createResponse(OK, getContentType(srcPath), body);
-				}
+				fileSize = static_cast<size_t>(fileInfo.st_size); // Obtenenos de fileInfo el tamaño del fichero y lo guardamos en fileSize para poder generar la cabecera Content-Length de la respuesta sin tener que leer todo el fichero y para posteriormente saber que cantidad del fichero hemos envidado.
+				return createFileResponse(srcPath, fileSize, fileFd); // Creamos la respuesta con el fichero a enviar y devolvemos la respuesta. La función createFileResponse se encargará de abrir el fichero y devolver el file descriptor del mismo en fileFd para poder enviarlo posteriormente.
 			}
 			throw HTTPException(FORBIDDEN, false);
 		}
@@ -1018,6 +1005,39 @@ HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
 			   << "</body></html>";
 	std::string body = bodystream.str();
 	return createResponse(OK, "text/html", body);
+}
+
+/**
+ * Creates an HTTP file response for the specified source path and file size.
+ *
+ * @param srcPath The source path of the file.
+ * @param fileSize The size of the file.
+ * @param fileFd The file descriptor of the opened file.
+ * @return The created HTTP response.
+ */
+HTTPResponse Server::createFileResponse(const std::string &srcPath, size_t fileSize, int &fileFd)
+{
+	HTTPResponse response;
+	std::ostringstream lengthStream;
+
+	lengthStream << fileSize;
+
+	response.setStatusCode(OK);
+	response.setStatusMessage(getStatusMessage(OK));
+	response.setHeader("Content-Type", getContentType(srcPath));
+	response.setHeader("Content-Length", lengthStream.str());
+
+	int fd = open(srcPath.c_str(), O_RDONLY);
+	if (fd == -1)
+	{
+		if (errno == ENOENT)
+			throw HTTPException(NOT_FOUND, false);
+		if (errno == EACCES)
+			throw HTTPException(FORBIDDEN, false);
+		throw HTTPException(INTERNAL_SERVER_ERROR, false);
+	}
+	fileFd = fd;
+	return response;
 }
 
 /**

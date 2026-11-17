@@ -46,7 +46,7 @@ private:
 	const Config *isValidConfig(const Config *config, int clientSocket);
 	const Config *getConfigFromHost(const std::string &host, const ServerSocket &serverSocket, int clientSocket);
 	EffectiveConfig resolveConfig(const Config *config, const Location *location) const;
-	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config);
+	HTTPResponse handleRequest(const HTTPRequest &request, const Config *config, int &fileFd, size_t &fileSize);
 	bool isMethodAllowed(const HTTPRequest &request, const Location *location);
 	//Response handling
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
@@ -54,6 +54,7 @@ private:
 	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
 	HTTPResponse createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget);
 	HTTPResponse createAutoIndexResponse(const std::string &requestPath);
+	HTTPResponse createFileResponse(const std::string &srcPath, size_t fileSize, int &fileFd);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
 	bool		 sameInterface(const std::string &interface1, const std::string &interface2) const;
