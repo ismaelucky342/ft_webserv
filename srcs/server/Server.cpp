@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/17 14:25:21 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/17 16:18:54 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -929,27 +929,24 @@ HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &co
 HTTPResponse Server::createErrorResponse(const HTTPException &e, const Config *config)
 {
 	HTTPStatus statusCode = static_cast<HTTPStatus>(e.getStatusCode());
-	std::ostringstream errorPagePathStream;
-
-	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error por defecto con el código de error y el mensaje correspondiente.
-		errorPagePathStream << DEFAULT_ERROR_PAGES_PATH << statusCode << ".html";
-	else
-		errorPagePathStream << config->getRoot() << config->getErrorPage(statusCode);
-
-	std::ostringstream bodystream;
 	HTTPResponse response;
-
-	std::ifstream error_file_stream(errorPagePathStream.str().c_str());
-	if (!error_file_stream.is_open()) // si no puede abrir la página de error o no existe, devolvemos una página de error estática con el código de error y el mensaje correspondiente.
+	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error por defecto con el código de error y el mensaje correspondiente.
 		response = createDefaultErrorPage(statusCode);
-	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
+	else
 	{
-		bodystream << error_file_stream.rdbuf();
-		std::string body = bodystream.str();
-		response = createResponse(statusCode, getContentType(errorPagePathStream.str()), body);
+		std::string errorPagePath = config->getRoot() + config->getErrorPage(statusCode);
+		std::ifstream errorFile(errorPagePath.c_str());
+		if (errorFile.is_open())
+		{
+			std::ostringstream bodyStream;
+			bodyStream << errorFile.rdbuf();
+			response = createResponse(statusCode, getContentType(errorPagePath), bodyStream.str());
+		}
+		else
+			response = createDefaultErrorPage(statusCode);
 	}
-	if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
-		response.setHeader("Connection", "close"); // Avisamos al cliente de que la conexión se cerrará después de enviar la respuesta de error.
+	if (e.getCloseConnection())
+		response.setHeader("Connection", "close");
 	return response;
 }
 
@@ -961,10 +958,59 @@ HTTPResponse Server::createErrorResponse(const HTTPException &e, const Config *c
  */
 HTTPResponse Server::createDefaultErrorPage(HTTPStatus statusCode)
 {
-	std::ostringstream bodystream;
-	bodystream << statusCode << " " << getStatusMessage(statusCode);
-	std::string body = bodystream.str();
-	return createResponse(statusCode, "text/plain", body);
+	std::ostringstream bodyStream;
+
+	bodyStream << "<!DOCTYPE html>\n"
+		<< "<html lang=\"es\">\n"
+		<< "<head>\n"
+		<< "    <meta charset=\"UTF-8\">\n"
+		<< "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+		<< "    <title>" << statusCode << " - " << getStatusMessage(statusCode) << "</title>\n"
+		<< "    <style>\n"
+		<< "        body {\n"
+		<< "            font-family: Arial, sans-serif;\n"
+		<< "            background-color: #f4f4f4;\n"
+		<< "            color: #333;\n"
+		<< "            display: flex;\n"
+		<< "            justify-content: center;\n"
+		<< "            align-items: center;\n"
+		<< "            min-height: 100vh;\n"
+		<< "            margin: 0;\n"
+		<< "        }\n"
+		<< "        .error-container {\n"
+		<< "            text-align: center;\n"
+		<< "            background-color: white;\n"
+		<< "            padding: 40px;\n"
+		<< "            border-radius: 8px;\n"
+		<< "            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);\n"
+		<< "            max-width: 500px;\n"
+		<< "            margin: 20px;\n"
+		<< "        }\n"
+		<< "        h1 {\n"
+		<< "            font-size: 64px;\n"
+		<< "            margin: 0;\n"
+		<< "            color: #d9534f;\n"
+		<< "        }\n"
+		<< "        h2 {\n"
+		<< "            margin-top: 10px;\n"
+		<< "            font-weight: normal;\n"
+		<< "        }\n"
+		<< "        p {\n"
+		<< "            color: #666;\n"
+		<< "            line-height: 1.5;\n"
+		<< "        }\n"
+		<< "    </style>\n"
+		<< "</head>\n"
+		<< "<body>\n"
+		<< "    <div class=\"error-container\">\n"
+		<< "        <h1>" << statusCode << "</h1>\n"
+		<< "        <h2>" << getStatusMessage(statusCode) << "</h2>\n"
+		<< "        <p>" << getErrorDescription(statusCode) << "</p>\n"
+		<< "    </div>\n"
+		<< "</body>\n"
+		<< "</html>\n";
+
+	return createResponse(statusCode, "text/html; charset=UTF-8", bodyStream.str());
 }
 
 /**

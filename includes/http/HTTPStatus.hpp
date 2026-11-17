@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 11:17:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/09/23 13:41:33 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/17 16:02:02 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -44,6 +44,7 @@ enum HTTPStatus
 };
 
 std::string	getStatusMessage(HTTPStatus status);
+std::string getErrorDescription(HTTPStatus status);
 HTTPStatus	stringToHTTPStatus(const std::string &statusString);
 
 #endif

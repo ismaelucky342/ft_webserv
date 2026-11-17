@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   HTTPStatus.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/14 12:51:31 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/10/30 15:51:53 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/17 16:02:57 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -56,6 +56,39 @@ std::string getStatusMessage(HTTPStatus status)
 		return "HTTP Version Not Supported";
 	default:
 		return "Unknown Status Code";
+	}
+}
+
+std::string getErrorDescription(HTTPStatus status)
+{
+	switch (status)
+	{
+		case BAD_REQUEST:
+			return "La solicitud enviada al servidor no es valida.";
+		case FORBIDDEN:
+			return "No tienes permiso para acceder a este recurso.";
+		case NOT_FOUND:
+			return "El servidor no ha encontrado el recurso solicitado.";
+		case METHOD_NOT_ALLOWED:
+			return "El metodo HTTP utilizado no esta permitido para este recurso.";
+		case REQUEST_TIMEOUT:
+			return "El servidor ha tardado demasiado en recibir la solicitud.";
+		case LENGTH_REQUIRED:
+			return "La solicitud debe incluir la cabecera Content-Length.";
+		case CONTENT_TOO_LARGE:
+			return "El contenido de la solicitud supera el tamano maximo permitido.";
+		case URI_TOO_LONG:
+			return "La URI solicitada es demasiado larga.";
+		case INTERNAL_SERVER_ERROR:
+			return "Se ha producido un error interno en el servidor.";
+		case NOT_IMPLEMENTED:
+			return "El servidor no admite la funcionalidad solicitada.";
+		case SERVICE_UNAVAILABLE:
+			return "El servidor no esta disponible temporalmente.";
+		case HTTP_VERSION_NOT_SUPPORTED:
+			return "La version HTTP utilizada no esta soportada.";
+		default:
+			return "Se ha producido un error al procesar la solicitud.";
 	}
 }
 
