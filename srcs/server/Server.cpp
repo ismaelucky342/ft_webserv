@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/17 16:18:54 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/17 18:02:59 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -567,6 +567,8 @@ bool Server::processNextRequest(int clientSocket)
 {
 	Client &client = getClient(clientSocket);
 	HTTPRequestParser parser;
+	int fileFd = -1;
+	size_t fileSize = 0;
 	const Config *config = NULL; // Puntero que nos señalará al config a usar para esa peticion con comprobación de validez de uso para el host y la interfaz/puerto del socket del cliente. Comprobamos que el config sea utilizable por el cliente de la petición para no dar acceso a directorios Prohibidos.
 
 	size_t headersEnd = parser.getHeadersEnd(client.getRecvBuffer());
@@ -612,13 +614,25 @@ bool Server::processNextRequest(int clientSocket)
 		client.getRequest().print(); // IMP LUEGO BORRRAR:Mostramos por pantalla los datos parseados de la peticion para poder entenderla. Esto es importante para depurar y entender mejor la peticion que nos envia el cliente.
 		updateClientKeepAlive(client); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
 
-		HTTPResponse response = handleRequest(client.getRequest(), config); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta.
-		client.getSendBuffer() = response.serialize(); //Serializamos la respuesta y la añadimos al buffer de envio del cliente. Esto es importante porque el cliente puede enviar la respuesta en varios paquetes y tenemos que ir enviando todo hasta que se haya enviado toda la respuesta.
+		HTTPResponse response = handleRequest(client.getRequest(), config, fileFd, fileSize); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta o el fd del fichero a leer.
+		if (fileFd != -1)
+		{
+			client.getSendBuffer() = response.serializeWithoutBody(); // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
+			client.setFile(fileFd, fileSize);
+			fileFd = -1; // El descriptor ahora pertenece a Client.
+		}
+		else
+			client.getSendBuffer() = response.serialize();
 		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
 		return true;
 	}
 	catch (const HTTPException &e)
 	{
+		if (fileFd != -1)
+		{
+			close(fileFd);
+			fileFd = -1;
+		}
 		HTTPResponse response = createErrorResponse(e, config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
 		client.getSendBuffer() = response.serialize();
 		if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
@@ -649,8 +663,6 @@ bool Server::processChunkedBody(Client &client, const Config *config, const size
 		throw HTTPException(NOT_IMPLEMENTED, true);
 	if (!parser.parseChunkedBody(client.getRecvBuffer(), headersEnd, config->getClientMaxBodySize(), requestEnd, body)) //Parseamos el body de la peticion con Transfer-Encoding: chunked. Si no se ha recibido todo el body, salimos y esperamos a que llegue el resto de la peticion. Si esta completa y se ha procesado bien, nos dará configurado correctamente requestEnd y body.
 		return false;
-	// if (config->getClientMaxBodySize() != 0 && body.size() > config->getClientMaxBodySize()) //Si el body de la peticion es mayor que el client_max_body_size del config, lanzamos una excepción indicando que la petición es demasiado grande. En caso de que la configuracion  tenga client_max_body_size = 0, significa que no hay limite de tamaño de body, por lo que no lanzamos la excepción. (Asi funciona Nginx).
-	// 	throw HTTPException(CONTENT_TOO_LARGE);
 	return true;
 }
 

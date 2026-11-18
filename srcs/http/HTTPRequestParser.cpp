@@ -158,7 +158,7 @@ bool HTTPRequestParser::parseContentLengthBody(const std::string &buffer, size_t
  */
 bool HTTPRequestParser::parseChunkedBody(const std::string &buffer, size_t bodyStart, const size_t maxBodySize, size_t &requestEnd, std::string &body)
 {
-	requestEnd = getChunkedRequestEnd(buffer, bodyStart, maxBodySize); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Aqui buscamos el 
+	requestEnd = getChunkedRequestEnd(buffer, bodyStart, maxBodySize); //Obtenemos la posición del final de la petición completa (headers + body) en el buffer de recepción del cliente. Aqui comprobamos que el body no supere el maxBodySize y si lo supera lanzamos una excepción indicando que la petición es demasiado grande. 
 	if (requestEnd == std::string::npos) //Si no hemos encontrado el final de una peticion con body, salimos y esperamos a que llegue el resto de la peticion. Esto es importante porque el cliente puede enviar la peticion en varios paquetes y tenemos que ir acumulando todo hasta tener la peticion completa.
 	{
 		std::cout << "Request chunked not complete yet." << std::endl;
