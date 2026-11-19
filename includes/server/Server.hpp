@@ -50,7 +50,7 @@ private:
 	bool isMethodAllowed(const HTTPRequest &request, const Location *location);
 	//Response handling
 	HTTPResponse createResponse(HTTPStatus statusCode, const std::string &contentType, const std::string &body);
-	HTTPResponse createErrorResponse(const HTTPException &e, const Config *config);
+	HTTPResponse createErrorResponse(const HTTPException &e, const Config *config, int &fileFd, size_t &fileSize);
 	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
 	HTTPResponse createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget);
 	HTTPResponse createAutoIndexResponse(const std::string &requestPath);

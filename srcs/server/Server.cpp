@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/19 16:01:20 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/19 19:19:23 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -665,13 +665,22 @@ bool Server::processNextRequest(int clientSocket)
 		HTTPResponse response = handleRequest(client.getRequest(), config, fileFd, fileSize); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta o el fd del fichero a leer.
 		if (fileFd != -1)
 		{
-			client.getSendBuffer() = response.serializeWithoutBody(); // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
-			client.setFile(fileFd, fileSize);
-			fileFd = -1; // El descriptor ahora pertenece a Client.
+			try
+			{
+				client.getSendBuffer() = response.serializeWithoutBody(); // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
+				client.setFile(fileFd, fileSize);
+				fileFd = -1;
+			}
+			catch (...) // Si ocurre un error al serializar la respuesta, cerramos el fichero y relanzamos la excepción para que se maneje más arriba. Esto es importante porque si no cerramos el fichero, se quedará abierto y podría causar problemas de recursos.
+			{
+				close(fileFd);
+				fileFd = -1;
+				throw;
+			}
 		}
 		else
 			client.getSendBuffer() = response.serialize();
-		std::cout << "---------Response serialized: " << std::endl << client.getSendBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la respuesta y poder entenderla. IMP: luego podemos quitarla.
+		std::cout << "---------Response serialized:" << std::endl << client.getSendBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la respuesta y poder entenderla. IMP: luego podemos quitarla.
 		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
 		return true;
 	}
@@ -682,8 +691,25 @@ bool Server::processNextRequest(int clientSocket)
 			close(fileFd);
 			fileFd = -1;
 		}
-		HTTPResponse response = createErrorResponse(e, config); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
-		client.getSendBuffer() = response.serialize();
+		HTTPResponse response = createErrorResponse(e, config, fileFd, fileSize); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
+		if (fileFd != -1)
+		{
+			try
+			{
+				client.getSendBuffer() = response.serializeWithoutBody(); // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
+				client.setFile(fileFd, fileSize);
+				fileFd = -1;
+			}
+			catch (...) // Si ocurre un error al serializar la respuesta, cerramos el fichero y relanzamos la excepción para que se maneje más arriba. Esto es importante porque si no cerramos el fichero, se quedará abierto y podría causar problemas de recursos.
+			{
+				close(fileFd);
+				fileFd = -1;
+				throw;
+			}
+		}
+		else
+			client.getSendBuffer() = response.serialize();
+		std::cout << "---------Response serialized in HTTP error management:  " << std::endl << client.getSendBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la respuesta y poder entenderla. IMP: luego podemos quitarla.
 		if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
 			client.setKeepAlive(false);
 		setPollEvent(clientSocket, POLLOUT);
@@ -902,42 +928,6 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 	throw HTTPException(FORBIDDEN, false);
 }
 
-// HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *config)
-// {
-// 	std::string srcPath;
-
-// 	const Location *location = config->findLocation(request.getPath());
-// 	if (location == NULL)
-// 		std::cout << RED << "Location not found for path: " << request.getPath() << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
-// 	else
-// 	{
-// 		std::cout << MAGENTA << "Location found: " << RESET<< std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
-// 		location->print();
-// 	}
-
-// 	if (location != NULL && location->hasRedirect()) // Si la location tiene un redirect, devolvemos un error 301 Moved Permanently con la cabecera Location apuntando a la nueva URL.
-// 		return createRedirectResponse(location);
-
-// 	if (location != NULL && !isMethodAllowed(request, location)) // Si la location no permite el método de la petición, devolvemos un error 405 Method Not Allowed.
-// 		return createErrorResponse(METHOD_NOT_ALLOWED, config);
-
-// 	if (request.getPath() == "/") // calcula donde esta la pagina html a decolver segun los parametros parseados del archivo conf.
-// 		srcPath = config->getRoot() + "/" + config->getIndex(); // el index por defecto
-// 	else
-// 		srcPath = config->getRoot() + request.getPath(); // la pagina solicitada
-
-// 	std::ifstream file_stream(srcPath.c_str());
-// 	if (!file_stream.is_open()) // si no puede abrir el fichero o no existe, devolvemos un error 404
-// 		return createErrorResponse(NOT_FOUND, config);
-// 	else // si puede abrir el fichero, lo leemos y lo devolvemos como respuesta.
-// 	{
-// 		std::ostringstream bodystream;
-// 		bodystream << file_stream.rdbuf();
-// 		std::string body = bodystream.str();
-// 		return createResponse(OK, getContentType(srcPath), body);
-// 	}
-// }
-
 /**
  * Checks if the request method is allowed for the given location. 
  * If there is no location to define the allowed methods, Only GET is allowed by default.
@@ -985,28 +975,43 @@ HTTPResponse Server::createResponse(HTTPStatus statusCode, const std::string &co
  * 
  * @param statusCode The HTTP status code.
  * @param config The configuration object.
+ * @param fileFd The file descriptor of the file being served.
+ * @param fileSize The size of the file being served.
  * @return The created HTTP response.
  */
-HTTPResponse Server::createErrorResponse(const HTTPException &e, const Config *config)
+HTTPResponse Server::createErrorResponse(const HTTPException &e, const Config *config, int &fileFd, size_t &fileSize)
 {
 	HTTPStatus statusCode = static_cast<HTTPStatus>(e.getStatusCode());
 	HTTPResponse response;
-	if (config == NULL || config->getErrorPage(statusCode).empty()) // Si no hay un config válido o no hay una página de error personalizada para el código de estado, devolvemos una página de error por defecto con el código de error y el mensaje correspondiente.
-		response = createDefaultErrorPage(statusCode);
-	else
+
+	fileFd = -1;
+	fileSize = 0;
+
+	if (config != NULL && !config->getErrorPage(statusCode).empty()) // Si hay una pagina predeterminada configurada para este error, la usamos. Si no hay, usamos la pagina de error predeterminada.
 	{
 		std::string errorPagePath = config->getRoot() + config->getErrorPage(statusCode);
-		std::ifstream errorFile(errorPagePath.c_str());
-		if (errorFile.is_open())
+		struct stat fileInfo;
+
+		if (stat(errorPagePath.c_str(), &fileInfo) == 0 && S_ISREG(fileInfo.st_mode) && fileInfo.st_size >= 0) // Si stat() no falla, el archivo es regular y su tamaño es válido, usamos la página de error personalizada.
 		{
-			std::ostringstream bodyStream;
-			bodyStream << errorFile.rdbuf();
-			response = createResponse(statusCode, getContentType(errorPagePath), bodyStream.str());
+			fileSize = static_cast<size_t>(fileInfo.st_size); // Obtenemos de fileInfo el tamaño del fichero y lo guardamos en fileSize para poder generar la cabecera Content-Length de la respuesta sin tener que leer todo el fichero y para posteriormente saber que cantidad del fichero hemos envidado.
+			try
+			{
+				response = createFileResponse(errorPagePath, fileSize, fileFd); //creamos la respuesta con el fichero de error a enviar y devolvemos la respuesta. La función createFileResponse se encargará de abrir el fichero y devolver el file descriptor del mismo en fileFd para poder tenerlo fuera de la funcion.
+			}
+			catch (const HTTPException &) // Si ocurre un error al abrir el archivo de error personalizado, usamos la página de error predeterminada, dejando los valores de fileFd y fileSize en -1 y 0 respectivamente para indicar que no hay archivo a enviar.
+			{
+				fileFd = -1;
+				fileSize = 0;
+				response = createDefaultErrorPage(statusCode);
+			}
 		}
-		else
+		else // Si stat() falla, el archivo no es regular o su tamaño no es válido, usamos la predeterminada.
 			response = createDefaultErrorPage(statusCode);
 	}
-	if (e.getCloseConnection())
+	else // Si no hay página personalizada configurada, usamos la predeterminada.
+		response = createDefaultErrorPage(statusCode);
+	if (e.getCloseConnection()) // SI es necesario cerrar la conexión, añadimos el header Connection: close a la respuesta para indicarle al cliente que cierre la conexión después de recibir la respuesta.
 		response.setHeader("Connection", "close");
 	return response;
 }
