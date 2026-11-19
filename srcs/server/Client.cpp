@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/15 12:42:34 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/16 19:19:27 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/19 14:51:59 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -319,6 +319,7 @@ void Client::closeFile()
 {
 	if (_fileFd != -1)
 	{
+		std::cout << "Closing file descriptor: " << _fileFd << std::endl; // IMP: Para depuracion y entender mejor. Luego podemos quitarlo.
 		close(_fileFd);
 		_fileFd = -1;
 	}

@@ -62,3 +62,8 @@ Testing/
 
 # bin
 webserv
+
+# Archivos grandes utilizados para pruebas de streaming
+www/sitio1/bufferExac.bin
+www/sitio1/bufferplus1.bin
+www/sitio1/large.bin

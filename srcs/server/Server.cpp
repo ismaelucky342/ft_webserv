@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/17 18:02:59 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/19 16:01:20 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -421,26 +421,69 @@ bool Server::writeToClient(int clientSocket)
 	Client &client = getClient(clientSocket);
 	std::string &sendBuffer = client.getSendBuffer();
 
-	ssize_t bytesSent = send(
-		clientSocket,
-		sendBuffer.c_str() + client.getBytesSent(),
-		sendBuffer.size() - client.getBytesSent(),
-		0);
-	if (bytesSent <= 0) // Si los bytes enviados son 0 es un error porque el pollout nos indica que el socket estaba listo para recibir datos porque tenia espacio pero cuando el send no envia nada (0) entonces se supone que es un error. En el -1 no podemos comprobar si es errno = EAGAIN por lo que entendemos que es un error al haber sido avisados de POLLOUT.
-	{
-		std::cerr << "Error sending data to client." << std::endl;
-		return false;
-	}
-	client.setLastActivity(time(NULL)); // Actualizamos el tiempo de la última actividad del cliente para poder manejar timeouts de clientes inactivos.
-	client.addBytesSent(bytesSent);
-	std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client." << std::endl;
-	//Si la respuesta no se ha enviado completamente, salimos y esperamos a que el socket del cliente esté listo para enviar más datos.
+	// 1. Enviar los datos pendientes del buffer.
 	if (client.getBytesSent() < sendBuffer.size())
 	{
-		std::cout << "Response not fully sended yet." << std::endl;
-		return true;
+		ssize_t bytesSent = send(
+			clientSocket,
+			sendBuffer.c_str() + client.getBytesSent(),
+			sendBuffer.size() - client.getBytesSent(),
+			0);
+		if (bytesSent <= 0) // Si los bytes enviados son 0 es un error porque el pollout nos indica que el socket estaba listo para recibir datos porque tenia espacio pero cuando el send no envia nada (0) entonces se supone que es un error. En el -1 no podemos comprobar si es errno = EAGAIN por lo que entendemos que es un error al haber sido avisados de POLLOUT.
+		{
+			std::cerr << "Error sending data to client." << std::endl;
+			return false;
+		}
+		client.setLastActivity(time(NULL)); // Actualizamos el tiempo de la última actividad del cliente para poder manejar timeouts de clientes inactivos.
+		client.addBytesSent(bytesSent);
+		std::cout << "Sent " << bytesSent << " total to " << sendBuffer.size() << " bytes to client." << std::endl;
+		//Si la respuesta no se ha enviado completamente, salimos y esperamos a que el socket del cliente esté listo para enviar más datos.
+		if (client.getBytesSent() < sendBuffer.size())
+		{
+			std::cout << "Response not fully sended yet." << std::endl;
+			return true;
+		}
 	}
-	//Si la respuesta se ha enviado completamente.
+
+	//2. El buffer se ha enviado complemtamente, reseteamos el buffer de envio y los bytes enviados para poder procesar la siguiente petición.
+	client.clearSendBuffer();
+	client.resetBytesSent();
+
+	// 3. Si estamos enviando un archivo, cargamos el siguiente bloque.
+	if (client.isSendingFile())
+	{
+		std::cout << "---------La respuesta va a leer de un archivo..." << std::endl;
+		if (client.getFileBytesRemaining() > 0)
+		{
+			char fileBuffer[FILE_BUFFER_SIZE];
+
+			size_t bytesToRead = client.getFileBytesRemaining();
+			if (bytesToRead > FILE_BUFFER_SIZE)
+				bytesToRead = FILE_BUFFER_SIZE;
+
+			ssize_t bytesRead = read(
+				client.getFileFd(),
+				fileBuffer,
+				bytesToRead);
+
+			if (bytesRead <= 0)
+			{
+				std::cerr << "Error reading file." << std::endl;
+				return false;
+			}
+
+			client.getSendBuffer().assign(fileBuffer, static_cast<size_t>(bytesRead)); // Asignamos el bloque de bytes leídos del archivo al buffer de envío del cliente. Usamos assign porque estamos enviando bytes leídos del archivo, que puede ser una imagen asi que no podemos asignar con el '=' porque eso se basaría en el '\0' para saber donde termina la cadena y en este caso no podemos asumir que el archivo tenga un '\0' al final. Por eso usamos assign que nos permite especificar el tamaño exacto de los bytes a asignar.
+			client.subtractFileBytesRemaining(static_cast<size_t>(bytesRead));
+			std::cout << "---------Read " << bytesRead << " bytes from file, " << client.getFileBytesRemaining() << " bytes remaining." << std::endl;
+			return true;
+		}
+
+		// Ya hemos enviado todos los bytes del archivo, cerramos el archivo.
+		std::cout << "---------File fully sended, closing file." << std::endl; // IMP: Para depuracion y entender mejor. Luego podemos quitarlo.
+		client.closeFile();
+	}
+	
+	//4. Si la respuesta se ha enviado completamente.
 	if (client.isKeepAlive()) // Si se mantiene vivo... Si no hay otra petición completa, cambiamos el evento a POLLIN para esperar a que llegue la siguiente petición.
 	{
 		client.reset(); //Reseteamos los campos de cliente necesarios para poder procesar peticiones.
@@ -480,6 +523,11 @@ void Server::disconnectClient(size_t index, bool doClose)
 	if (doClose)
 		close(fd);
 	_pollFds[index].fd = -1;
+
+	std::map<int, Client>::iterator it = _clients.find(fd);
+	if (it != _clients.end())
+		it->second.closeFile();
+
 	_clients.erase(fd);
 	std::cout << "Client disconnected." << std::endl;
 }
@@ -623,6 +671,7 @@ bool Server::processNextRequest(int clientSocket)
 		}
 		else
 			client.getSendBuffer() = response.serialize();
+		std::cout << "---------Response serialized: " << std::endl << client.getSendBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la respuesta y poder entenderla. IMP: luego podemos quitarla.
 		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
 		return true;
 	}
