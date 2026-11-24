@@ -55,6 +55,7 @@ private:
 	HTTPResponse createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget);
 	HTTPResponse createAutoIndexResponse(const std::string &requestPath);
 	HTTPResponse createFileResponse(const std::string &srcPath, size_t fileSize, int &fileFd);
+	void		 prepareResponseForSending(Client &client, const HTTPResponse &response, int &fileFd, size_t fileSize);
 	//Vector of server sockets handling
 	ServerSocket *getServerSocketByFd(int fd);
 	bool		 sameInterface(const std::string &interface1, const std::string &interface2) const;

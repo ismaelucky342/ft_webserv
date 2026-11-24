@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/19 19:19:23 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/24 17:51:56 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,7 @@
 #include <sys/socket.h> // socket(), bind(), listen(), accept(), send(), recv()
 #include <netinet/in.h> // sockaddr_in, htons(), ntohs(), INADDR_ANY
 #include <sys/stat.h> // stat() Para obtener info de un archivo (tipo, tamaño, permisos, etc.)
+#include <dirent.h> // opendir(), readdir(), closedir() Para leer el contenido de un directorio.
 
 #include "server/Server.hpp"
 #include <arpa/inet.h> // inet_ntoa(), inet_ntop(), inet_pton(), inet_addr()
@@ -663,23 +664,7 @@ bool Server::processNextRequest(int clientSocket)
 		updateClientKeepAlive(client); // Establecemos si la conexión es persistente o no según los headers de la petición y la versión del protocolo.
 
 		HTTPResponse response = handleRequest(client.getRequest(), config, fileFd, fileSize); //Manejamos la peticion y generamos la respuesta correspondiente. Esto implica leer el fichero solicitado, generar la cabecera de la respuesta y el cuerpo de la respuesta o el fd del fichero a leer.
-		if (fileFd != -1)
-		{
-			try
-			{
-				client.getSendBuffer() = response.serializeWithoutBody(); // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
-				client.setFile(fileFd, fileSize);
-				fileFd = -1;
-			}
-			catch (...) // Si ocurre un error al serializar la respuesta, cerramos el fichero y relanzamos la excepción para que se maneje más arriba. Esto es importante porque si no cerramos el fichero, se quedará abierto y podría causar problemas de recursos.
-			{
-				close(fileFd);
-				fileFd = -1;
-				throw;
-			}
-		}
-		else
-			client.getSendBuffer() = response.serialize();
+		prepareResponseForSending(client, response, fileFd, fileSize); //Preparamos la respuesta para ser enviada al cliente. Esto implica serializar la cabecera de la respuesta y el cuerpo de la respuesta o el fd del fichero a leer.
 		std::cout << "---------Response serialized:" << std::endl << client.getSendBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la respuesta y poder entenderla. IMP: luego podemos quitarla.
 		setPollEvent(clientSocket, POLLOUT); // Cambiamos el evento a POLLOUT para que el poll nos avise cuando el socket del cliente esté listo para que le enviemos datos.
 		return true;
@@ -692,23 +677,7 @@ bool Server::processNextRequest(int clientSocket)
 			fileFd = -1;
 		}
 		HTTPResponse response = createErrorResponse(e, config, fileFd, fileSize); // Si ocurre una excepción HTTP (por ejemplo, un error de parseo de la solicitud), generamos una respuesta de error correspondiente y la enviamos al cliente. Luego tendremos que mejorarlo con las paginas de error personalizadas que nos indicara en archivo de configuracion.
-		if (fileFd != -1)
-		{
-			try
-			{
-				client.getSendBuffer() = response.serializeWithoutBody(); // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
-				client.setFile(fileFd, fileSize);
-				fileFd = -1;
-			}
-			catch (...) // Si ocurre un error al serializar la respuesta, cerramos el fichero y relanzamos la excepción para que se maneje más arriba. Esto es importante porque si no cerramos el fichero, se quedará abierto y podría causar problemas de recursos.
-			{
-				close(fileFd);
-				fileFd = -1;
-				throw;
-			}
-		}
-		else
-			client.getSendBuffer() = response.serialize();
+		prepareResponseForSending(client, response, fileFd, fileSize); //Preparamos la respuesta para ser enviada al cliente. Esto implica serializar la cabecera de la respuesta y el cuerpo de la respuesta o el fd del fichero a leer.
 		std::cout << "---------Response serialized in HTTP error management:  " << std::endl << client.getSendBuffer() << std::endl; //IMP DEBUGGER Linea para mostrar por pantalla la respuesta y poder entenderla. IMP: luego podemos quitarla.
 		if (e.getCloseConnection()) // Si la petición no se ha consumido completamente, cerramos la conexión para evitar interpretar los datos pendientes como una nueva petición.
 			client.setKeepAlive(false);
@@ -1117,6 +1086,12 @@ HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
 			   << "</body></html>";
 	std::string body = bodystream.str();
 	return createResponse(OK, "text/html", body);
+
+	// DIR* dir = opendir(requestPath.c_str());
+	// if (dir == NULL) {
+	// 	throw HTTPException(FORBIDDEN, false); // (IMP: revisar el error a deolver.) No se puede abrir el directorio, devolvemos un error 403 Forbidden.
+	// }
+
 }
 
 /**
@@ -1150,6 +1125,18 @@ HTTPResponse Server::createFileResponse(const std::string &srcPath, size_t fileS
 	}
 	fileFd = fd;
 	return response;
+}
+
+void Server::prepareResponseForSending(Client &client, const HTTPResponse &response, int &fileFd, size_t fileSize)
+{
+	if (fileFd != -1) // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
+	{
+		client.getSendBuffer() = response.serializeWithoutBody(); // Si hay un fichero a enviar, generamos la cabecera de la respuesta sin el body y lo guardamos en el buffer de envio del cliente. El body se enviará directamente desde el fichero para no cargarlo en memoria.
+		client.setFile(fileFd, fileSize);
+		fileFd = -1;
+	}
+	else // Si no hay un fichero a enviar, generamos la cabecera de la respuesta con el body y lo guardamos en el buffer de envio del cliente.
+		client.getSendBuffer() = response.serialize();
 }
 
 /**
