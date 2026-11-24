@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/24 17:51:56 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/24 19:39:27 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -872,13 +872,13 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 			return createRedirectResponse(MOVED_PERMANENTLY, request.getPath() + "/");
 		else // Si la ruta termina en '/', buscamos el index del directorio y lo devolvemos como respuesta.
 		{
-			srcPath += effectiveConfig.index; // Añadimos el index al path del directorio para obtener el path completo del fichero index.
-			if (stat(srcPath.c_str(), &fileInfo) == -1) // Si stat ha dado error...
+			std::string srcPathIndex = srcPath + effectiveConfig.index; // Añadimos el index al path del directorio para obtener el path completo del fichero index.
+			if (stat(srcPathIndex.c_str(), &fileInfo) == -1) // Si stat ha dado error...
 			{
 				if (errno == ENOENT) // El archivo index configurado no existe.
 				{
 					if (effectiveConfig.autoindex) // Si la configuración efectiva tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
-						return createAutoIndexResponse(request.getPath());
+						return createAutoIndexResponse(srcPath);
 					else
 						throw HTTPException(FORBIDDEN, false); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
 				}
@@ -889,7 +889,7 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 			if (S_ISREG(fileInfo.st_mode)) // Si es un fichero regular, prepararemos la respuesta sin body pero con el fd del fichero abierto para poder enviarlo posteriormente. Esto es importante porque el fichero puede ser muy grande y no queremos cargarlo todo en memoria, sino enviarlo en trozos.
 			{
 				fileSize = static_cast<size_t>(fileInfo.st_size); // Obtenenos de fileInfo el tamaño del fichero y lo guardamos en fileSize para poder generar la cabecera Content-Length de la respuesta sin tener que leer todo el fichero y para posteriormente saber que cantidad del fichero hemos envidado.
-				return createFileResponse(srcPath, fileSize, fileFd); // Creamos la respuesta con el fichero a enviar y devolvemos la respuesta. La función createFileResponse se encargará de abrir el fichero y devolver el file descriptor del mismo en fileFd para poder enviarlo posteriormente.
+				return createFileResponse(srcPathIndex, fileSize, fileFd); // Creamos la respuesta con el fichero a enviar y devolvemos la respuesta. La función createFileResponse se encargará de abrir el fichero y devolver el file descriptor del mismo en fileFd para poder enviarlo posteriormente.
 			}
 			throw HTTPException(FORBIDDEN, false);
 		}
@@ -1071,27 +1071,37 @@ HTTPResponse Server::createRedirectResponse(HTTPStatus statusCode, const std::st
  * @param requestPath The request path.
  * @return The generated autoindex page.
  */
-HTTPResponse Server::createAutoIndexResponse(const std::string &requestPath)
+HTTPResponse Server::createAutoIndexResponse(const std::string &path)
 {
+	std::cout << YELLOW << "Generating autoindex for path: " << path << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::ostringstream bodystream;
 	bodystream << "<html><head>"
-			   << "<title>Index of " << requestPath << "</title>"
+			   << "<title>Index of " << path << "</title>"
 			   << "</head><body>"
-			   << "<h1>Index of " << requestPath << "</h1>"
-			   << "<hr><ul>"
-			   << "<li><a href=\"file1.txt\">file1.txt</a></li>"
-			   << "<li><a href=\"file2.html\">file2.html</a></li>"
-			   << "<li><a href=\"images/\">images/</a></li>"
-			   << "</ul><hr>"
+			   << "<h1>Index of " << path << "</h1>"
+			   << "<hr><ul>";
+	// 		   << "<li><a href=\"file1.txt\">file1.txt</a></li>"
+	// 		   << "<li><a href=\"file2.html\">file2.html</a></li>"
+	// 		   << "<li><a href=\"images/\">images/</a></li>"
+	// return createResponse(OK, "text/html", body);
+	DIR* dir = opendir(path.c_str());
+	if (dir == NULL) {
+		throw HTTPException(FORBIDDEN, false); // (IMP: revisar el error a deolver.) No se puede abrir el directorio, devolvemos un error 403 Forbidden.
+	}
+	std::cout << YELLOW << "Opened directory: " << path << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	struct dirent* ent;
+	while ((ent = readdir(dir)) != NULL) {
+		std::string name = ent->d_name;
+		if (name == "." || name == "..") {
+			continue; // Skip current and parent directory entries
+		}
+		bodystream << "<li><a href=\"" << name << "\">" << name << "</a></li>";
+	}
+	closedir(dir);
+	bodystream << "</ul><hr>"
 			   << "</body></html>";
 	std::string body = bodystream.str();
 	return createResponse(OK, "text/html", body);
-
-	// DIR* dir = opendir(requestPath.c_str());
-	// if (dir == NULL) {
-	// 	throw HTTPException(FORBIDDEN, false); // (IMP: revisar el error a deolver.) No se puede abrir el directorio, devolvemos un error 403 Forbidden.
-	// }
-
 }
 
 /**
