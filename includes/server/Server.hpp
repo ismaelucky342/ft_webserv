@@ -53,7 +53,7 @@ private:
 	HTTPResponse createErrorResponse(const HTTPException &e, const Config *config, int &fileFd, size_t &fileSize);
 	HTTPResponse createDefaultErrorPage(HTTPStatus statusCode);
 	HTTPResponse createRedirectResponse(HTTPStatus statusCode, const std::string &redirectTarget);
-	HTTPResponse createAutoIndexResponse(const std::string &path);
+	HTTPResponse createAutoIndexResponse(const std::string &srcPath, const std::string &requestPath);
 	HTTPResponse createFileResponse(const std::string &srcPath, size_t fileSize, int &fileFd);
 	void		 prepareResponseForSending(Client &client, const HTTPResponse &response, int &fileFd, size_t fileSize);
 	//Vector of server sockets handling

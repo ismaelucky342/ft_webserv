@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/25 11:48:33 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/25 15:29:19 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -879,7 +879,7 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 				if (errno == ENOENT) // El archivo index configurado no existe.
 				{
 					if (effectiveConfig.autoindex) // Si la configuración efectiva tiene autoindex activado, generamos un listado de los ficheros del directorio y lo devolvemos como respuesta.
-						return createAutoIndexResponse(srcPath);
+						return createAutoIndexResponse(srcPath, request.getPath());
 					else
 						throw HTTPException(FORBIDDEN, false); // IMP AQUI nginx devuelve 403 Forbidden si no encuentra el index y no tiene autoindex activado.
 				}
@@ -1068,13 +1068,14 @@ HTTPResponse Server::createRedirectResponse(HTTPStatus statusCode, const std::st
 /**
  * Generates an autoindex page for the specified source path and request path.
  *
- * @param path The source path of the directory for which to generate the autoindex page.
+ * @param srcPath The source path of the directory for which to generate the autoindex page.
+ * @param requestPath The path of the request.
  * @return The generated autoindex page.
  */
-HTTPResponse Server::createAutoIndexResponse(const std::string &path)
+HTTPResponse Server::createAutoIndexResponse(const std::string &srcPath, const std::string &requestPath)
 {
-	std::cout << YELLOW << "Generating autoindex for path: " << path << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
-	std::string body = AutoIndex::generate(path);
+	std::cout << YELLOW << "Generating autoindex for path: " << srcPath << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	std::string body = AutoIndex::generateBody(srcPath, requestPath);
 	return createResponse(OK, "text/html", body);
 }
 
