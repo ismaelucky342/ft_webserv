@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/25 11:40:13 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/25 18:42:11 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/25 20:22:13 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,8 @@
 #include <sstream> // std::ostringstream
 #include <dirent.h> // opendir(), readdir(), closedir() Para leer el contenido de un directorio.
 #include <sys/stat.h> // stat() Para obtener info de un archivo (tipo, tamaño, permisos, etc.)
+#include <vector>
+#include <ctime>
 
 #include "http/Autoindex.hpp" 
 #include "http/HTTPException.hpp"
@@ -29,6 +31,35 @@
  */
 std::string AutoIndex::generateBody(const std::string &srcPath, const std::string &requestPath)
 {
+	DIR* dir = opendir(srcPath.c_str());
+	if (dir == NULL) {
+		throw HTTPException(FORBIDDEN, false); // (IMP: revisar el error a deolver.) No se puede abrir el directorio, devolvemos un error 403 Forbidden.
+	}
+	std::cout << YELLOW << "Opened directory: " << srcPath << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
+	
+	std::vector<AutoIndex::DirectoryEntry> entries;
+	struct dirent* ent;
+	while ((ent = readdir(dir)) != NULL)
+	{
+		std::string name = ent->d_name;
+		if (name == "." || name == "..") {
+			continue; // Skip current and parent directory entries
+		}
+
+		std::string fullPath = srcPath + name;
+		struct stat fileInfo;
+		if (stat(fullPath.c_str(), &fileInfo) != 0)
+			continue;
+
+		AutoIndex::DirectoryEntry entry;
+		entry.name = name;
+		entry.isDirectory = S_ISDIR(fileInfo.st_mode);
+		entry.tam = fileInfo.st_size;
+		entry.fecha = fileInfo.st_mtime;
+		entries.push_back(entry);
+	}
+	closedir(dir);
+
 	std::string displayPath = escapeHtml(requestPath);
 	std::ostringstream bodystream;
 	bodystream << "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n"
@@ -39,33 +70,19 @@ std::string AutoIndex::generateBody(const std::string &srcPath, const std::strin
 			  << "</head>\n<body>\n"
 			  << "<h1>Indice de " << displayPath << "</h1>\n"
 			  << "<table>\n<tr><th>Nombre</th><th>Tamaño</th><th>Modificado</th></tr>\n";
-	DIR* dir = opendir(srcPath.c_str());
-	if (dir == NULL) {
-		throw HTTPException(FORBIDDEN, false); // (IMP: revisar el error a deolver.) No se puede abrir el directorio, devolvemos un error 403 Forbidden.
-	}
-	std::cout << YELLOW << "Opened directory: " << srcPath << RESET << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
-	struct dirent* ent;
-	while ((ent = readdir(dir)) != NULL)
+	for (std::vector<AutoIndex::DirectoryEntry>::const_iterator it = entries.begin(); it != entries.end(); ++it)
 	{
-		std::string name = ent->d_name;
-		if (name == "." || name == "..") {
-			continue; // Skip current and parent directory entries
-		}
-		std::string encodedName = encodeUrl(name);
-		std::string displayName = escapeHtml(name);
-
-		std::string fullPath = srcPath + name;
-		struct stat fileInfo;
-		if (stat(fullPath.c_str(), &fileInfo) == -1)
-			continue;
-		if (S_ISDIR(fileInfo.st_mode)) // Check if the entry is a directory
+		std::string encodedName = encodeUrl(it->name);
+		std::string displayName = escapeHtml(it->name);
+		if (it->isDirectory)
 		{
 			encodedName += "/"; // Append a slash to directory names for clarity
 			displayName += "/"; // Append a slash to directory names for clarity
 		}
-		bodystream << "<tr><td><a href=\"" << encodedName << "\">" << displayName << "</a></td></tr>\n";
+		bodystream << "<tr><td><a href=\"" << encodedName << "\">" << displayName << "</a></td>"
+				   << "<td>" << it->tam << "</td>"
+				   << "<td>" << AutoIndex::formatDate(it->fecha) << "</td></tr>\n"; // localtime devuelve la hora pasada como parametro(un time_t) en un struct tm y asctime convertira esa tm a string. (IMP: revisar el formato de fecha y hora que devuelve asctime, porque devuelve un salto de linea al final y eso puede romper el html.)
 	}
-	closedir(dir);
 	bodystream << "</table>\n"
 			   << "</body>\n</html>";
 	std::string body = bodystream.str();
@@ -138,4 +155,24 @@ std::string AutoIndex::encodeUrl(const std::string &str)
 		}
 	}
 	return result;
+}
+
+/**
+ * Formats a time_t value into a human-readable date string.
+ * This function converts a time_t value into a string in the format "YYYY-MM-DD HH:MM".
+ * @param t The time_t value to format.
+ * @return The formatted date string.
+ */
+std::string AutoIndex::formatDate(time_t t)
+{
+	char buf[32];
+	struct tm *timeInfo = std::localtime(&t);
+
+	if (timeInfo == NULL)
+		return "";
+
+	if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", timeInfo) == 0)
+		return "";
+
+	return buf;
 }
