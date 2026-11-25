@@ -34,6 +34,7 @@ SRC_FILES	=	main.cpp \
 				config/ServerParser.cpp \
 				config/Token.cpp \
 				config/Tokenizer.cpp \
+				http/Autoindex.cpp \
 				http/HTTPException.cpp \
 				http/HTTPRequest.cpp \
 				http/HTTPRequestParser.cpp \
