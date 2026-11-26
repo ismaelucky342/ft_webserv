@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/25 11:10:52 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/25 19:17:26 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/26 17:36:56 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,4 +29,5 @@ private:
 	static std::string escapeHtml(const std::string &str); // Escapes special HTML characters in a string to prevent XSS attacks.(Nombre visible en HTML)
 	static std::string encodeUrl(const std::string &str); // Encodes special characters in a URL to ensure it is valid and safe for use in hyperlinks.(Nombre dentro de href)
 	static std::string formatDate(time_t t); // Formats a time_t value into a human-readable date string for display in the autoindex page.
+	static bool compareEntries(const DirectoryEntry &a, const DirectoryEntry &b); // Compares two DirectoryEntry objects for sorting purposes, prioritizing directories over files and sorting alphabetically.
 };

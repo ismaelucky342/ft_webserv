@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/25 11:40:13 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/25 20:22:13 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/26 17:56:36 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@
 #include <sys/stat.h> // stat() Para obtener info de un archivo (tipo, tamaño, permisos, etc.)
 #include <vector>
 #include <ctime>
+#include <algorithm> // std::sort
 
 #include "http/Autoindex.hpp" 
 #include "http/HTTPException.hpp"
@@ -59,6 +60,7 @@ std::string AutoIndex::generateBody(const std::string &srcPath, const std::strin
 		entries.push_back(entry);
 	}
 	closedir(dir);
+	std::sort(entries.begin(), entries.end(), AutoIndex::compareEntries);
 
 	std::string displayPath = escapeHtml(requestPath);
 	std::ostringstream bodystream;
@@ -175,4 +177,18 @@ std::string AutoIndex::formatDate(time_t t)
 		return "";
 
 	return buf;
+}
+
+/**
+ * Compares two DirectoryEntry objects for sorting purposes.
+ * Directories are prioritized over files, and entries are sorted alphabetically by name.
+ * @param a The first DirectoryEntry to compare.
+ * @param b The second DirectoryEntry to compare.
+ * @return true if the first entry should come before the second, false otherwise.
+ */
+bool AutoIndex::compareEntries(const DirectoryEntry &a, const DirectoryEntry &b)
+{
+	if (a.isDirectory != b.isDirectory) // Si uno es
+		return a.isDirectory; // Directories come before files
+	return a.name < b.name; // Sort alphabetically by name
 }
