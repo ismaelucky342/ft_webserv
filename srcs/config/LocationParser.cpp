@@ -3,14 +3,15 @@
 /*                                                        :::      ::::::::   */
 /*   LocationParser.cpp                                 :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/07 16:27:51 by ide-dieg          #+#    #+#             */
-/*   Updated: 2026/10/07 16:31:48 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/27 19:12:34 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "config/LocationParser.hpp"
+#include "pathUtils.hpp"
 #include <stdexcept>
 
 LocationParser::LocationParser() {}
@@ -46,7 +47,12 @@ Location LocationParser::parse(const BlockParser &block)
 		const std::string &name = parser._directives[i].getDirective();
 		const std::vector<std::string> &arguments = parser._directives[i].getArguments();
 		if (name == "root")
-			location.setRoot(arguments[0]);
+		{
+			std::string normalizedRoot;
+			if (!pathUtils::normalizeFileSystemPath(arguments[0], normalizedRoot))
+				throw std::runtime_error("Error: invalid root location path");
+			location.setRoot(normalizedRoot);
+		}
 		else if (name == "index")
 		{
 			if (arguments.size() != 1)
@@ -63,9 +69,19 @@ Location LocationParser::parse(const BlockParser &block)
 		else if (name == "return")
 			location.setRedirect(stringToHTTPStatus(arguments[0]), arguments[1]);
 		else if (name == "upload_store")
-			location.setUploadStore(arguments[0]);
+		{
+			std::string normalizedUploadPath;
+			if (!pathUtils::normalizeFileSystemPath(arguments[0], normalizedUploadPath))
+				throw std::runtime_error("Error: invalid upload store path");
+			location.setUploadStore(normalizedUploadPath);
+		}
 		else if (name == "cgi")
-			location.setCgi(arguments[0], arguments[1]);
+		{
+			std::string normalizedCgiExecutablePath;
+			if (!pathUtils::normalizeFileSystemPath(arguments[1], normalizedCgiExecutablePath))
+				throw std::runtime_error("Error: invalid CGI executable path");
+			location.setCgi(arguments[0], normalizedCgiExecutablePath);
+		}
 	}
 	return location;
 }
