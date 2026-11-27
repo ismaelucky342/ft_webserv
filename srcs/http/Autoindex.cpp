@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/25 11:40:13 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/26 17:56:36 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/27 18:44:05 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,7 +25,7 @@
 
 /**
  * Generates an autoindex body for the specified directory path.
- * @param path The directory path for which to generate the autoindex body.
+ * @param srcPath The directory path for which to generate the autoindex body.
  * @param requestPath The path of the request.
  * @return The generated autoindex body as a string.
  * @throws HTTPException If the directory cannot be opened (e.g., due to permissions).
@@ -43,11 +43,12 @@ std::string AutoIndex::generateBody(const std::string &srcPath, const std::strin
 	while ((ent = readdir(dir)) != NULL)
 	{
 		std::string name = ent->d_name;
-		if (name == "." || name == "..") {
-			continue; // Skip current and parent directory entries
-		}
-
-		std::string fullPath = srcPath + name;
+		if (name == "." || (name == ".." && requestPath == "/")) // Skip current directory entry and parent directory entry when at the root request path
+			continue; // Skip current directory entry
+		std::string fullPath = srcPath;
+		if (fullPath[fullPath.length() - 1] != '/')
+			fullPath += "/";
+		fullPath += name;
 		struct stat fileInfo;
 		if (stat(fullPath.c_str(), &fileInfo) != 0)
 			continue;

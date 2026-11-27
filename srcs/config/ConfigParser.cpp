@@ -3,14 +3,15 @@
 /*                                                        :::      ::::::::   */
 /*   ConfigParser.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: ide-dieg <ide-dieg@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/06 15:01:12 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/06 00:31:11 by ide-dieg         ###   ########.fr       */
+/*   Updated: 2026/11/27 17:56:59 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "colors.hpp"
+#include "pathUtils.hpp"
 #include "config/ConfigParser.hpp"
 #include "config/LocationParser.hpp"
 #include <cstdlib>
@@ -251,7 +252,10 @@ std::vector<Config> ConfigParser::buildConfigs() const
 			{
 				if (arguments.size() != 1)
 					throw std::runtime_error("Error: root requires one argument");
-				config.setRoot(arguments[0]);
+				std::string normalizedRoot;
+				if (!pathUtils::normalizeFileSystemPath(arguments[0], normalizedRoot))
+					throw std::runtime_error("Error: invalid root path");
+				config.setRoot(normalizedRoot);
 			}
 			else if (name == "index")
 			{

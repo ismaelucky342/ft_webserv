@@ -20,6 +20,7 @@ CUT			=	\033[K
 #source files
 SRC_FILES	=	main.cpp \
 				stringUtils.cpp \
+				pathUtils.cpp \
 				signals.cpp \
 				server/Server.cpp \
 				server/ServerSocket.cpp \

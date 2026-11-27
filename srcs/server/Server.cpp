@@ -6,7 +6,7 @@
 /*   By: mvidal-h <mvidal-h@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/28 18:43:58 by mvidal-h          #+#    #+#             */
-/*   Updated: 2026/11/25 15:29:19 by mvidal-h         ###   ########.fr       */
+/*   Updated: 2026/11/27 17:47:36 by mvidal-h         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,6 +27,7 @@
 #include "server/constants.hpp"
 #include "colors.hpp"
 #include "stringUtils.hpp"
+#include "pathUtils.hpp"
 #include "signals.hpp"
 #include "server/constants.hpp"
 
@@ -850,7 +851,8 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 		return createRedirectResponse(effectiveConfig.redirectCode, effectiveConfig.redirectTarget);
 	if (!isMethodAllowed(request, location)) // Si no se permite el método, devolvemos un error 405 Method Not Allowed.
 		throw HTTPException(METHOD_NOT_ALLOWED, false);
-	srcPath = effectiveConfig.root + request.getPath();
+	if (!pathUtils::normalizePath(effectiveConfig.root, request.getPath(), srcPath))// Normalizamos el path de la petición para que no pueda acceder a directorios superiores al root configurado en caso de que la ruta venga con ".." o ".". Si no se puede normalizar el path (devolvió false), devolvemos un error 403 Forbidden.
+		throw HTTPException(FORBIDDEN, false);
 	std::cout << "ROOT: " << effectiveConfig.root << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::cout << "PATH: " << request.getPath() << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
 	std::cout << "SRC: " << srcPath << std::endl; //IMP: PARA DEPURACION BORRAR LUEGO.
@@ -873,7 +875,11 @@ HTTPResponse Server::handleRequest(const HTTPRequest &request, const Config *con
 			return createRedirectResponse(MOVED_PERMANENTLY, request.getPath() + "/");
 		else // Si la ruta termina en '/', buscamos el index del directorio y lo devolvemos como respuesta.
 		{
-			std::string srcPathIndex = srcPath + effectiveConfig.index; // Añadimos el index al path del directorio para obtener el path completo del fichero index.
+			// Añadimos el index al path del directorio para obtener el path completo del fichero index.
+			std::string srcPathIndex = srcPath; 
+			if (srcPathIndex[srcPathIndex.length() - 1] != '/')
+				srcPathIndex += "/";
+			srcPathIndex += effectiveConfig.index;
 			if (stat(srcPathIndex.c_str(), &fileInfo) == -1) // Si stat ha dado error...
 			{
 				if (errno == ENOENT) // El archivo index configurado no existe.
